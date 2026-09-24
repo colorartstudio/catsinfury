@@ -1,0 +1,68 @@
+import { RouletteSector } from '../types';
+
+export const ROULETTE_SECTORS: RouletteSector[] = [
+  {
+    id: 'chama',
+    name: 'CHAMA',
+    icon: '🔥',
+    description: '+20% de Dano para ataques do elemento Fogo nesta rodada.',
+    color: '#ef4444',
+    effectType: 'FIRE_BOOST',
+  },
+  {
+    id: 'mare',
+    name: 'MARÉ',
+    icon: '💧',
+    description: '+30% de Eficiência em todas as curas nesta rodada.',
+    color: '#0ea5e9',
+    effectType: 'WATER_BOOST',
+  },
+  {
+    id: 'rocha',
+    name: 'ROCHA',
+    icon: '🪨',
+    description: '+20% de Defesa para gatos do elemento Terra nesta rodada.',
+    color: '#eab308',
+    effectType: 'EARTH_BOOST',
+  },
+  {
+    id: 'brisa',
+    name: 'BRISA',
+    icon: '🌪️',
+    description: '+20% de Esquiva para gatos do elemento Vento nesta rodada.',
+    color: '#10b981',
+    effectType: 'WIND_BOOST',
+  },
+  {
+    id: 'eclipse',
+    name: 'ECLIPSE',
+    icon: '🌑',
+    description: 'Sombras cósmicas cobrem o campo: todos os ataques causam −10% de dano.',
+    color: '#6366f1',
+    effectType: 'ECLIPSE',
+  },
+  {
+    id: 'furia',
+    name: 'FÚRIA',
+    icon: '⚡',
+    description: '+15% de chance de Crítico para o personagem com menor HP relativo.',
+    color: '#f59e0b',
+    effectType: 'FURY',
+  },
+  {
+    id: 'caos',
+    name: 'CAOS',
+    icon: '🌀',
+    description: 'A ordem de iniciativa de turno é invertida (o mais lento ataca primeiro)!',
+    color: '#a855f7',
+    effectType: 'CHAOS',
+  },
+  {
+    id: 'bencao',
+    name: 'BÊNÇÃO',
+    icon: '✨',
+    description: 'Luz celestial restaura 15% do HP máximo de todos os combatentes vivos.',
+    color: '#ec4899',
+    effectType: 'BLESSING',
+  },
+];

@@ -1,0 +1,6 @@
+{
+  "name": "Cats in Fury: Battle Arena",
+  "description": "RPG estratégico de batalha por turnos 1v1 com equipes de gatos elementais, animações de combate fluidas, efeitos procedurais e arena interativa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

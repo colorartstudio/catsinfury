@@ -1,0 +1,232 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  h1, h2, h3, .font-heading {
+    font-family: 'Chakra Petch', sans-serif;
+    letter-spacing: 0.05em;
+  }
+
+  .font-display {
+    font-family: 'Teko', sans-serif;
+    letter-spacing: 0.08em;
+  }
+}
+
+@keyframes screen-shake-sm {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 3px); }
+  40% { transform: translate(4px, -3px); }
+  60% { transform: translate(-3px, -2px); }
+  80% { transform: translate(3px, 2px); }
+}
+
+@keyframes screen-shake-lg {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-8px, 6px) rotate(-1deg); }
+  30% { transform: translate(8px, -6px) rotate(1deg); }
+  45% { transform: translate(-6px, -4px) rotate(-0.5deg); }
+  60% { transform: translate(6px, 4px) rotate(0.5deg); }
+  75% { transform: translate(-4px, 2px); }
+  90% { transform: translate(2px, -2px); }
+}
+
+@keyframes float-gentle {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+
+@keyframes target-reticle-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.08); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes float-up-damage {
+  0% { opacity: 0; transform: translateY(10px) scale(0.6); }
+  20% { opacity: 1; transform: translateY(-10px) scale(1.2); }
+  80% { opacity: 1; transform: translateY(-36px) scale(1); }
+  100% { opacity: 0; transform: translateY(-50px) scale(0.8); }
+}
+
+.animate-shake-sm {
+  animation: screen-shake-sm 0.3s ease-in-out;
+}
+
+.animate-shake-lg {
+  animation: screen-shake-lg 0.5s ease-in-out;
+}
+
+.animate-float {
+  animation: float-gentle 2.6s ease-in-out infinite;
+}
+
+.animate-target-spin {
+  animation: target-reticle-spin 4s linear infinite;
+}
+
+.animate-float-damage {
+  animation: float-up-damage 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cat-dash-right {
+  0% { transform: scale(1) translateX(0); }
+  35% { transform: scale(1.12) translateX(32px) rotate(-4deg); }
+  100% { transform: scale(1) translateX(0); }
+}
+
+@keyframes cat-dash-left {
+  0% { transform: scale(1) translateX(0); }
+  35% { transform: scale(1.12) translateX(-32px) rotate(4deg); }
+  100% { transform: scale(1) translateX(0); }
+}
+
+@keyframes cat-hurt-shake {
+  0% { transform: translateX(0); filter: brightness(1); }
+  25% { transform: translateX(6px); filter: brightness(1.7) saturate(2); }
+  50% { transform: translateX(-6px); filter: brightness(1.4); }
+  75% { transform: translateX(3px); }
+  100% { transform: translateX(0); filter: brightness(1); }
+}
+
+@keyframes cat-dodge-slide {
+  0% { transform: translateY(0); opacity: 1; }
+  35% { transform: translateY(10px) scale(0.92); opacity: 0.35; filter: blur(1px); }
+  100% { transform: translateY(0); opacity: 1; filter: none; }
+}
+
+@keyframes cat-cast-pulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(245,158,11,0)); }
+  50% { transform: scale(1.12) translateY(-4px); filter: drop-shadow(0 0 16px rgba(245,158,11,0.9)); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(245,158,11,0)); }
+}
+
+.animate-cat-dash-right {
+  animation: cat-dash-right 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-cat-dash-left {
+  animation: cat-dash-left 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-cat-hurt {
+  animation: cat-hurt-shake 0.35s ease-in-out forwards;
+}
+
+.animate-cat-dodge {
+  animation: cat-dodge-slide 0.4s ease-out forwards;
+}
+
+.animate-cat-cast {
+  animation: cat-cast-pulse 0.45s ease-out forwards;
+}
+
+@keyframes sunburst-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes modal-pop {
+  0% { opacity: 0; transform: scale(0.65) translateY(20px); }
+  60% { opacity: 1; transform: scale(1.04) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes defeat-slam {
+  0% { opacity: 0; transform: translateY(-40px) scale(1.15); filter: blur(4px); }
+  45% { opacity: 1; transform: translateY(0) scale(0.96); filter: none; }
+  65% { transform: translateY(-6px) scale(1.02); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pulse-crimson {
+  0%, 100% { box-shadow: 0 0 30px rgba(225, 29, 72, 0.4), inset 0 0 40px rgba(225, 29, 72, 0.3); }
+  50% { box-shadow: 0 0 65px rgba(225, 29, 72, 0.8), inset 0 0 80px rgba(225, 29, 72, 0.5); }
+}
+
+@keyframes crown-glow {
+  0%, 100% { filter: drop-shadow(0 0 15px rgba(245, 158, 11, 0.7)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 35px rgba(251, 191, 36, 1)); transform: scale(1.08); }
+}
+
+.animate-sunburst {
+  animation: sunburst-spin 25s linear infinite;
+}
+
+.animate-modal-pop {
+  animation: modal-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-defeat-slam {
+  animation: defeat-slam 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.animate-pulse-crimson {
+  animation: pulse-crimson 2s infinite ease-in-out;
+}
+
+.animate-crown-glow {
+  animation: crown-glow 2s infinite ease-in-out;
+}
+
+@keyframes desperation-flame {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(244, 63, 94, 0.7), inset 0 0 10px rgba(244, 63, 94, 0.5);
+    border-color: rgba(251, 113, 133, 1);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(225, 29, 72, 1), inset 0 0 20px rgba(255, 255, 255, 0.6);
+    border-color: rgba(255, 255, 255, 1);
+    transform: scale(1.03);
+  }
+}
+
+@keyframes desperation-text-pulse {
+  0%, 100% {
+    transform: scale(1);
+    text-shadow: 0 0 8px rgba(244, 63, 94, 0.8);
+  }
+  50% {
+    transform: scale(1.1);
+    text-shadow: 0 0 16px rgba(255, 255, 255, 1), 0 0 25px rgba(225, 29, 72, 1);
+  }
+}
+
+.animate-desperation-flame {
+  animation: desperation-flame 1.2s infinite ease-in-out;
+}
+
+.animate-desperation-text {
+  animation: desperation-text-pulse 1s infinite ease-in-out;
+}
+
+/* Custom scrollbars for battle log and team selector */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.4);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.8);
+}
