@@ -170,11 +170,11 @@ export const AlmanacScreen: React.FC<AlmanacScreenProps> = ({ onBack }) => {
                 </p>
               </div>
 
-              {/* ⚡ PODER DE DESESPERO (≤ 10% HP) */}
+              {/* ⚡ PODER DE DESESPERO (≤ 20% HP) */}
               <div className="bg-gradient-to-r from-rose-950/70 via-red-950/50 to-slate-900/90 p-3.5 rounded-2xl border border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.15)]">
                 <div className="text-xs font-heading font-bold text-rose-400 mb-1 flex items-center gap-1.5">
                   <Zap className="w-4 h-4 text-yellow-300 fill-current animate-pulse" />
-                  <span>PODER DESTRUTIVO (≤ 10% HP): {cat.desperationName} (2x Dano)</span>
+                  <span>PODER DESTRUTIVO (≤ 20% HP): {cat.desperationName} ({cat.id === 'wind' ? '3x' : '2x'} Dano)</span>
                 </div>
                 <p className="text-xs text-slate-200 leading-relaxed">
                   {cat.desperationDescription}

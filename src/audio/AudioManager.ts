@@ -449,41 +449,71 @@ class SoundEngine {
     osc2.stop(t + 0.36);
   }
 
-  // DEVASTATING DESPERATION HIT (Double Damage 10% HP Strike)
-  public playDesperation() {
+  // DEVASTATING DESPERATION HIT — synthesized cat attack (no audio file required)
+  public playDesperation(multiplier: 2 | 3 = 2) {
     if (this.isMuted) return;
     this.initCtx();
     if (!this.ctx) return;
-    const t = this.ctx.currentTime;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
 
-    // 1. Heavy sub bass detonation
-    const sub = this.ctx.createOscillator();
-    const subGain = this.ctx.createGain();
-    sub.type = 'sine';
-    sub.frequency.setValueAtTime(180, t);
-    sub.frequency.exponentialRampToValueAtTime(30, t + 0.65);
-    subGain.gain.setValueAtTime(0.65 * this.volume, t);
-    subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
-    sub.connect(subGain);
-    subGain.connect(this.ctx.destination);
-    sub.start(t);
-    sub.stop(t + 0.72);
+    const noise = (duration: number, freq: number, amt: number, delay: number) => {
+      const length = Math.max(1, Math.floor(ctx.sampleRate * duration));
+      const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = freq;
+      filter.Q.value = 0.7;
+      const gain = ctx.createGain();
+      const start = t + delay;
+      gain.gain.setValueAtTime(amt * this.volume, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(start);
+      src.stop(start + duration + 0.02);
+    };
 
-    // 2. High-energy electric blast / rupture chord
-    const chord = [440, 554.37, 659.25, 880, 1108.73];
-    chord.forEach((freq, idx) => {
-      const osc = this.ctx!.createOscillator();
-      const gain = this.ctx!.createGain();
+    const yowl = (delay: number) => {
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(freq, t);
-      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, t + 0.45);
-      gain.gain.setValueAtTime((0.15 + idx * 0.03) * this.volume, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-      osc.connect(gain);
-      gain.connect(this.ctx!.destination);
-      osc.start(t);
-      osc.stop(t + 0.52);
-    });
+      osc2.type = 'triangle';
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1800, t + delay);
+      const start = t + delay;
+      osc.frequency.setValueAtTime(640, start);
+      osc.frequency.exponentialRampToValueAtTime(980, start + 0.07);
+      osc.frequency.exponentialRampToValueAtTime(220, start + 0.42);
+      osc2.frequency.setValueAtTime(320, start);
+      osc2.frequency.exponentialRampToValueAtTime(140, start + 0.42);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.exponentialRampToValueAtTime(0.42 * this.volume, start + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.48);
+      osc.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc2.start(start);
+      osc.stop(start + 0.5);
+      osc2.stop(start + 0.5);
+    };
+
+    noise(0.18, 2400, 0.28, 0);
+    yowl(0.02);
+    noise(0.12, 3200, 0.22, 0.16);
+    if (multiplier === 3) {
+      yowl(0.28);
+      noise(0.1, 2800, 0.18, 0.42);
+    }
   }
 
   // DODGE

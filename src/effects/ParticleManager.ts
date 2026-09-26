@@ -100,7 +100,7 @@ class ParticleSystem {
     });
   }
 
-  // --- CHARACTER-SPECIFIC DEVASTATING DESPERATION POWERS (≤ 10% HP) ---
+  // --- CHARACTER-SPECIFIC DEVASTATING DESPERATION POWERS (≤ 20% HP) ---
   public createDesperationEffect(catId: string, element: ElementType, x: number, y: number) {
     // Massive Screen Shake
     this.triggerScreenShake(20);

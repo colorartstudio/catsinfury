@@ -101,7 +101,9 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
   const arenaContainerRef = useRef<HTMLDivElement>(null);
   const catAnchors = useRef<Record<string, HTMLDivElement | null>>({});
   const strikeToken = useRef(0);
+  const clawToken = useRef(0);
   const [strike, setStrike] = useState<(StrikeMotion & { attackerId: string; token: number }) | null>(null);
+  const [giantClaw, setGiantClaw] = useState<{ targetId: string; multiplier: 2 | 3; token: number } | null>(null);
 
   // Auto-manage selected attacker: Must be ALIVE and preferably HAS NOT ACTED YET this round
   useEffect(() => {
@@ -312,6 +314,16 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
     }, 360);
   };
 
+  const triggerGiantClaw = (targetId: string, catId: string) => {
+    const token = clawToken.current + 1;
+    clawToken.current = token;
+    const multiplier: 2 | 3 = catId === 'wind' ? 3 : 2;
+    setGiantClaw({ targetId, multiplier, token });
+    window.setTimeout(() => {
+      setGiantClaw((current) => (current && current.token === token ? null : current));
+    }, 900);
+  };
+
   // 3. EXECUTE ACTION (PLAYER)
   const handlePlayerAction = (action: ActionType) => {
     if (isExecutingAction || phase !== 'PLAYER_TURN') return;
@@ -329,7 +341,13 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       return;
     }
 
-    if (attacker.shieldRounds > 0 && (action === 'ATTACK' || action === 'SPECIAL')) {
+    // Shield blocks strikes, except Wind Cat's basic attack (Esquiva Eólica: +1 hit under shield).
+    if (attacker.shieldRounds > 0 && action === 'SPECIAL') {
+      AudioManager.playShieldAbsorb();
+      addLog(`⚠️ ${attacker.baseStats.name} está sob escudo e não pode usar o especial!`, 'system');
+      return;
+    }
+    if (attacker.shieldRounds > 0 && action === 'ATTACK' && attacker.baseStats.id !== 'wind') {
       AudioManager.playShieldAbsorb();
       addLog(`⚠️ ${attacker.baseStats.name} está sob escudo protetor e não pode atacar!`, 'system');
       return;
@@ -435,7 +453,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       flashPaw(strikeTokenId);
       // Particles & Devastating Effects
       if (result.isDesperation) {
-        AudioManager.playDesperation();
+        triggerGiantClaw(defender.instanceId, attacker.baseStats.id);
+        AudioManager.playDesperation(attacker.baseStats.id === 'wind' ? 3 : 2);
         ParticleManager.createDesperationEffect(
           attacker.baseStats.id,
           attacker.baseStats.element,
@@ -445,7 +464,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         ParticleManager.addFloatingText(
           defenderCoords.x,
           defenderCoords.y - 15,
-          `⚡ ${attacker.baseStats.desperationName.toUpperCase()}! 2X DANO (-${result.finalDamage})`,
+          `⚡ ${attacker.baseStats.desperationName.toUpperCase()}! ${attacker.baseStats.id === 'wind' ? '3X' : '2X'} DANO (-${result.finalDamage})`,
           'desperation'
         );
       } else {
@@ -483,14 +502,24 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       // Apply damage to defender (compute snapshot first — never rely on setState updater side-effects)
       const updatedBotCats: CatCombatant[] = botCats.map((c) => {
         if (c.instanceId !== defender!.instanceId) return c;
-        const newHp = Math.max(0, c.currentHp - result.finalDamage);
-        const isFainted = newHp <= 0;
-        return {
-          ...c,
-          currentHp: newHp,
-          isAlive: !isFainted,
-          animState: isFainted ? 'fainted' : result.isDodged ? 'dodging' : 'hurt',
-        };
+          const newHp = Math.max(0, c.currentHp - result.finalDamage);
+          const isFainted = newHp <= 0;
+          let finalHp = newHp;
+          let triggeredWater = c.hasTriggeredWaterPassive;
+          if (!c.hasTriggeredWaterPassive && c.baseStats.id === 'water' && !isFainted && newHp / c.maxHp <= 0.5) {
+            const passiveHeal = Math.round(c.maxHp * 0.10);
+            finalHp = Math.min(c.maxHp, newHp + passiveHeal);
+            triggeredWater = true;
+            ParticleManager.addFloatingText(defenderCoords.x, defenderCoords.y - 25, `+${passiveHeal} PASSIVA!`, 'heal');
+            addLog(`💧 ${c.baseStats.name} ativou Fonte da Vida (+10% HP)!`, 'heal');
+          }
+          return {
+            ...c,
+            currentHp: finalHp,
+            isAlive: !isFainted,
+            hasTriggeredWaterPassive: triggeredWater,
+            animState: isFainted ? 'fainted' : result.isDodged ? 'dodging' : 'hurt',
+          };
       });
 
       // Burn on fire attacks (applied onto the same snapshot)
@@ -508,7 +537,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       const actionName = action === 'SPECIAL' ? attacker.baseStats.specialName : 'Ataque';
       if (result.isDesperation) {
         addLog(
-          `⚡ [PODER DESTRUTIVO 2X] ${attacker.baseStats.name} desferiu [${attacker.baseStats.desperationName}] com o DOBRO DE DANO em ${defender.baseStats.name}: ${result.finalDamage} de dano fulminante!`,
+          `⚡ [PODER DESTRUTIVO ${attacker.baseStats.id === 'wind' ? '3X' : '2X'}] ${attacker.baseStats.name} desferiu [${attacker.baseStats.desperationName}] em ${defender.baseStats.name}: ${result.finalDamage} de dano fulminante!`,
           'desperation',
           attacker.baseStats.element
         );
@@ -520,7 +549,23 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         );
       }
 
-      // Cooldown update, Taunt for Earth Cat, and mark Desperation as consumed
+      // Water special strikes AND restores its own HP. The 20% tide decays each use and does not spend the 3 shared heals.
+      const waterTide =
+        action === 'SPECIAL' && attacker.baseStats.id === 'water'
+          ? BattleEngine.calculateHeal(attacker, attacker, arena, activeSector, true)
+          : 0;
+      if (waterTide > 0) {
+        const tideCoords = getCatCoords('player', attacker.slotIndex);
+        AudioManager.playHeal();
+        ParticleManager.createHealEffect(tideCoords.x, tideCoords.y);
+        ParticleManager.addFloatingText(tideCoords.x, tideCoords.y, `+${waterTide} MARÉ`, 'heal');
+        addLog(
+          `💧 ${attacker.baseStats.name} recuperou +${waterTide} HP com a Maré (uso ${attacker.waterSpecialUses + 1}, a próxima fica mais fraca).`,
+          'heal'
+        );
+      }
+
+      // Cooldown update, Taunt for Earth Cat, Water tide, and mark Desperation as consumed
       setPlayerCats((prev) =>
         prev.map((c) => {
           if (c.instanceId !== attacker.instanceId) return c;
@@ -534,7 +579,14 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
             }
           }
           const hasTriggeredDesperation = c.hasTriggeredDesperation || Boolean(result.isDesperation);
-          return { ...c, specialCooldown: newCd, isTaunting, hasTriggeredDesperation };
+          return {
+            ...c,
+            currentHp: waterTide > 0 ? Math.min(c.maxHp, c.currentHp + waterTide) : c.currentHp,
+            waterSpecialUses: waterTide > 0 ? c.waterSpecialUses + 1 : c.waterSpecialUses,
+            specialCooldown: newCd,
+            isTaunting,
+            hasTriggeredDesperation,
+          };
         })
       );
 
@@ -569,7 +621,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
   // Player Heal Action (Consumes 1 of 3 uses)
   const executePlayerHeal = (attacker: CatCombatant) => {
     AudioManager.playHeal();
-    const healAmt = BattleEngine.calculateHeal(attacker, attacker, arena, activeSector, attacker.baseStats.id === 'water');
+    const healAmt = BattleEngine.calculateHeal(attacker, attacker, arena, activeSector, false);
     const coords = getCatCoords('player', attacker.slotIndex);
 
     ParticleManager.createHealEffect(coords.x, coords.y);
@@ -689,24 +741,26 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       }
 
       if (decision.action === 'HEAL') {
-        const ally = botCats.find((b) => b.instanceId === decision.targetId && b.isAlive) || botAttacker;
-        AudioManager.playHeal();
-        const healAmt = BattleEngine.calculateHeal(botAttacker, ally, arena, activeSector);
-        const coords = getCatCoords('bot', ally.slotIndex);
+        const healAmt = BattleEngine.calculateHeal(botAttacker, botAttacker, arena, activeSector, false);
+        const coords = getCatCoords('bot', botAttacker.slotIndex);
 
+        AudioManager.playHeal();
         ParticleManager.createHealEffect(coords.x, coords.y);
         ParticleManager.addFloatingText(coords.x, coords.y, `+${healAmt} HP`, 'heal');
 
         setBotCats((prev) =>
           prev.map((b) =>
-            b.instanceId === ally.instanceId
+            b.instanceId === botAttacker.instanceId
               ? { ...b, currentHp: Math.min(b.maxHp, b.currentHp + healAmt) }
               : b
           )
         );
         setBotHealsLeft((prev) => Math.max(0, prev - 1));
         setBotUsedHealThisRound(true);
-        addLog(`💧 [Inimigo] ${botAttacker.baseStats.name} curou ${ally.baseStats.name} em +${healAmt} HP!`, 'heal');
+        addLog(
+          `💧 [Inimigo] ${botAttacker.baseStats.name} curou a si mesmo em +${healAmt} HP!`,
+          'heal'
+        );
 
         setTimeout(() => {
           const nextBotActed = [...curBotActed, botAttacker.instanceId];
@@ -736,8 +790,16 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         return;
       }
 
-      // A shielded bot cannot strike; it holds the barrier and passes, same as the player.
-      if (botAttacker.shieldRounds > 0 && (decision.action === 'ATTACK' || decision.action === 'SPECIAL')) {
+      if (botAttacker.shieldRounds > 0 && botAttacker.baseStats.id === 'wind' && decision.action === 'SPECIAL') {
+        decision = { action: 'ATTACK', targetId: decision.targetId };
+      }
+
+      // A shielded bot cannot strike, except Wind Cat's basic attack (+1 hit).
+      if (
+        botAttacker.shieldRounds > 0 &&
+        botAttacker.baseStats.id !== 'wind' &&
+        (decision.action === 'ATTACK' || decision.action === 'SPECIAL')
+      ) {
         addLog(`🛡️ [Inimigo] ${botAttacker.baseStats.name} mantém o escudo e passa a vez.`, 'shield');
         setTimeout(() => {
           const nextBotActed = [...curBotActed, botAttacker.instanceId];
@@ -783,7 +845,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       setTimeout(() => {
         flashPaw(botStrikeToken);
         if (result.isDesperation) {
-          AudioManager.playDesperation();
+          triggerGiantClaw(defender.instanceId, botAttacker.baseStats.id);
+          AudioManager.playDesperation(botAttacker.baseStats.id === 'wind' ? 3 : 2);
           ParticleManager.createDesperationEffect(
             botAttacker.baseStats.id,
             botAttacker.baseStats.element,
@@ -793,7 +856,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           ParticleManager.addFloatingText(
             defenderCoords.x,
             defenderCoords.y - 15,
-            `⚡ ${botAttacker.baseStats.desperationName.toUpperCase()}! 2X DANO (-${result.finalDamage})`,
+            `⚡ ${botAttacker.baseStats.desperationName.toUpperCase()}! ${botAttacker.baseStats.id === 'wind' ? '3X' : '2X'} DANO (-${result.finalDamage})`,
             'desperation'
           );
         } else {
@@ -856,7 +919,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
 
         if (result.isDesperation) {
           addLog(
-            `⚡ [PODER DESTRUTIVO 2X] [Inimigo] ${botAttacker.baseStats.name} desencadeou [${botAttacker.baseStats.desperationName}] com o DOBRO DE DANO em ${defender.baseStats.name}: ${result.finalDamage} de dano!`,
+            `⚡ [PODER DESTRUTIVO ${botAttacker.baseStats.id === 'wind' ? '3X' : '2X'}] [Inimigo] ${botAttacker.baseStats.name} desencadeou [${botAttacker.baseStats.desperationName}] em ${defender.baseStats.name}: ${result.finalDamage} de dano!`,
             'desperation',
             botAttacker.baseStats.element
           );
@@ -868,12 +931,35 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           );
         }
 
-        // Mark bot's desperation as used if it triggered
-        if (result.isDesperation) {
+        // Water special strikes and restores its own HP. Desperation still marks on any finisher.
+        const botWaterTide =
+          decision.action === 'SPECIAL' && botAttacker.baseStats.id === 'water'
+            ? BattleEngine.calculateHeal(botAttacker, botAttacker, arena, activeSector, true)
+            : 0;
+        if (botWaterTide > 0) {
+          const tideCoords = getCatCoords('bot', botAttacker.slotIndex);
+          AudioManager.playHeal();
+          ParticleManager.createHealEffect(tideCoords.x, tideCoords.y);
+          ParticleManager.addFloatingText(tideCoords.x, tideCoords.y, `+${botWaterTide} MARÉ`, 'heal');
+          addLog(
+            `💧 [Inimigo] ${botAttacker.baseStats.name} recuperou +${botWaterTide} HP com a Maré (uso ${botAttacker.waterSpecialUses + 1}, a próxima fica mais fraca).`,
+            'heal'
+          );
+        }
+
+        if (result.isDesperation || botWaterTide > 0 || decision.action === 'SPECIAL') {
           setBotCats((prev) =>
-            prev.map((b) =>
-              b.instanceId === botAttacker.instanceId ? { ...b, hasTriggeredDesperation: true } : b
-            )
+            prev.map((b) => {
+              if (b.instanceId !== botAttacker.instanceId) return b;
+              return {
+                ...b,
+                currentHp: botWaterTide > 0 ? Math.min(b.maxHp, b.currentHp + botWaterTide) : b.currentHp,
+                waterSpecialUses: botWaterTide > 0 ? b.waterSpecialUses + 1 : b.waterSpecialUses,
+                specialCooldown:
+                  decision.action === 'SPECIAL' ? b.baseStats.specialCooldownMax : b.specialCooldown,
+                hasTriggeredDesperation: b.hasTriggeredDesperation || Boolean(result.isDesperation),
+              };
+            })
           );
         }
 
@@ -1068,16 +1154,21 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
 
   const isAttackerAvailable = attackerCat && attackerCat.isAlive && !playerCatsActed.includes(attackerCat.instanceId);
   const isPlayerTurnNow = phase === 'PLAYER_TURN' && !isExecutingAction && !!isAttackerAvailable;
+  const isAttackBlockedByShield = attackerCat ? attackerCat.shieldRounds > 0 : false;
+  const windCanStrikeThroughShield = attackerCat?.baseStats.id === 'wind';
+  const isBasicBlockedByShield = isAttackBlockedByShield && !windCanStrikeThroughShield;
   const pendingPlayerCats = playerCats.filter((c) => c.isAlive && !playerCatsActed.includes(c.instanceId));
   const canPassTurn =
-    isPlayerTurnNow && pendingPlayerCats.length > 0 && pendingPlayerCats.every((c) => c.shieldRounds > 0);
-  const isAttackBlockedByShield = attackerCat ? attackerCat.shieldRounds > 0 : false;
+    isPlayerTurnNow &&
+    pendingPlayerCats.length > 0 &&
+    pendingPlayerCats.every((c) => c.shieldRounds > 0 && c.baseStats.id !== 'wind');
   const isSpecialOnCooldown = attackerCat ? attackerCat.specialCooldown > 0 : true;
   const isDesperationReady = attackerCat
     ? attackerCat.isAlive &&
-      (attackerCat.currentHp / attackerCat.maxHp <= 0.10) &&
+      (attackerCat.currentHp / attackerCat.maxHp <= 0.20) &&
       !attackerCat.hasTriggeredDesperation
     : false;
+  const finisherTag = attackerCat?.baseStats.id === 'wind' ? '3X' : '2X';
 
   const latestLog = logs.length > 0 ? logs[logs.length - 1] : null;
 
@@ -1142,7 +1233,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           <section
             className="flex flex-col gap-1 sm:gap-2 items-center w-full"
             style={
-              strike && playerCats.some((c) => c.instanceId === strike.attackerId)
+              strike && playerCats.some((c) => c.instanceId === strike.attackerId) ||
+              giantClaw && playerCats.some((c) => c.instanceId === giantClaw.targetId)
                 ? { position: 'relative', zIndex: 40 }
                 : undefined
             }
@@ -1169,7 +1261,11 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                         ? 'opacity-70'
                         : 'opacity-95 hover:opacity-100'
                     }`}
-                    style={strike?.attackerId === cat.instanceId ? { position: 'relative', zIndex: 40 } : undefined}
+                    style={
+                      strike?.attackerId === cat.instanceId || giantClaw?.targetId === cat.instanceId
+                        ? { position: 'relative', zIndex: 40 }
+                        : undefined
+                    }
                   >
                     <CatRenderer
                       cat={cat}
@@ -1177,6 +1273,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                       hasActedThisRound={hasActed}
                       flipX={true}
                       strike={strike?.attackerId === cat.instanceId ? strike : null}
+                      giantClaw={giantClaw?.targetId === cat.instanceId ? giantClaw.multiplier : null}
                       anchorRef={(node) => {
                         catAnchors.current[cat.instanceId] = node;
                       }}
@@ -1197,7 +1294,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           <section
             className="flex flex-col gap-1 sm:gap-2 items-center w-full"
             style={
-              strike && botCats.some((c) => c.instanceId === strike.attackerId)
+              strike && botCats.some((c) => c.instanceId === strike.attackerId) ||
+              giantClaw && botCats.some((c) => c.instanceId === giantClaw.targetId)
                 ? { position: 'relative', zIndex: 40 }
                 : undefined
             }
@@ -1216,7 +1314,11 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                   <div
                     key={cat.instanceId}
                     className="transition-all"
-                    style={strike?.attackerId === cat.instanceId ? { position: 'relative', zIndex: 40 } : undefined}
+                    style={
+                      strike?.attackerId === cat.instanceId || giantClaw?.targetId === cat.instanceId
+                        ? { position: 'relative', zIndex: 40 }
+                        : undefined
+                    }
                   >
                     <CatRenderer
                       cat={cat}
@@ -1224,6 +1326,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                       canBeTargeted={cat.isAlive}
                       hasActedThisRound={hasActed}
                       strike={strike?.attackerId === cat.instanceId ? strike : null}
+                      giantClaw={giantClaw?.targetId === cat.instanceId ? giantClaw.multiplier : null}
                       anchorRef={(node) => {
                         catAnchors.current[cat.instanceId] = node;
                       }}
@@ -1264,7 +1367,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                 {isDesperationReady && (
                   <span className="bg-rose-600 text-white font-bold text-[9px] px-1.5 py-0.2 rounded border border-rose-300 flex items-center gap-0.5 animate-bounce shadow">
                     <Zap className="w-2.5 h-2.5 text-yellow-300" />
-                    2X DANO ATIVO!
+                    {finisherTag} DANO ATIVO!
                   </span>
                 )}
               </span>
@@ -1304,12 +1407,12 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
           {/* 1. ATAQUE */}
           <button
-            disabled={!isPlayerTurnNow || (isAttackBlockedByShield && !canPassTurn)}
+            disabled={!isPlayerTurnNow || isBasicBlockedByShield}
             onClick={() => (canPassTurn ? passShieldedTurn() : handlePlayerAction('ATTACK'))}
             className={`py-2 sm:py-2.5 px-1 rounded-xl font-heading font-bold text-xs sm:text-sm tracking-wider uppercase transition-all flex flex-col items-center justify-center gap-0.5 border relative ${
               canPassTurn
                 ? 'bg-gradient-to-b from-cyan-600 to-sky-700 hover:from-cyan-500 hover:to-sky-600 text-white border-cyan-300 shadow-[0_0_18px_rgba(6,182,212,0.55)] cursor-pointer active:scale-95'
-                : isPlayerTurnNow && !isAttackBlockedByShield
+                : isPlayerTurnNow && !isBasicBlockedByShield
                 ? isDesperationReady
                   ? 'bg-gradient-to-b from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white border-rose-300 shadow-[0_0_25px_rgba(244,63,94,0.9)] cursor-pointer active:scale-95 animate-pulse'
                   : 'bg-gradient-to-b from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white border-rose-400 shadow-[0_0_20px_rgba(225,29,72,0.6)] cursor-pointer active:scale-95 animate-pulse'
@@ -1319,13 +1422,13 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
             {isDesperationReady && (
               <span className="absolute -top-2 inset-x-0 mx-auto w-fit bg-amber-400 text-slate-950 text-[8px] font-black px-1.5 py-0.2 rounded-full border border-amber-200 shadow flex items-center gap-0.5">
                 <Zap className="w-2 h-2 text-slate-950 fill-current" />
-                2X DANO
+                {finisherTag} DANO
               </span>
             )}
             {canPassTurn ? <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" /> : <Swords className="w-4 h-4 sm:w-5 sm:h-5" />}
             <span>{canPassTurn ? 'PASSAR' : 'ATAQUE'}</span>
             <span className="text-[8px] sm:text-[9px] font-mono opacity-80">
-              {canPassTurn ? 'A vez' : isAttackBlockedByShield ? 'Bloqueado' : isDesperationReady ? '2x Fulminante' : 'Básico'}
+              {canPassTurn ? 'A vez' : isBasicBlockedByShield ? 'Bloqueado' : attackerCat?.baseStats.id === 'wind' && isAttackBlockedByShield ? '+1 golpe' : isDesperationReady ? `${finisherTag} Fulminante` : 'Básico'}
             </span>
           </button>
 
@@ -1344,7 +1447,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
             {isDesperationReady && !isSpecialOnCooldown && !isAttackBlockedByShield && (
               <span className="absolute -top-2 inset-x-0 mx-auto w-fit bg-rose-600 text-white text-[8px] font-black px-1.5 py-0.2 rounded-full border border-rose-300 shadow flex items-center gap-0.5">
                 <Zap className="w-2 h-2 text-yellow-300 fill-current" />
-                2X DANO
+                {finisherTag} DANO
               </span>
             )}
             <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1353,7 +1456,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
               {isSpecialOnCooldown
                 ? `CD: ${attackerCat?.specialCooldown}R`
                 : isDesperationReady
-                ? `${attackerCat?.baseStats.desperationName.split(' ')[0]} 2x!`
+                ? `${attackerCat?.baseStats.desperationName.split(' ')[0]} ${finisherTag.toLowerCase()}!`
                 : 'PRONTO!'}
             </span>
           </button>

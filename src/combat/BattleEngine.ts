@@ -115,9 +115,16 @@ export class BattleEngine {
         skillMod = 1.40; // +40% dano
         notes.push('🔥 Especial Inferno (+40% Dano)');
       } else if (attacker.baseStats.id === 'wind') {
-        // Handled as multi-hit 60% in execute
-        skillMod = 0.60;
+        // Lâminas Ciclônicas: 3 hits × 60% ATK
+        skillMod = 1.80;
+        notes.push('🌪️ Lâminas Ciclônicas: 3 golpes (60% cada)');
       }
+    }
+
+    // Esquiva Eólica: basic attack gains one extra hit while the shield is up
+    if (action === 'ATTACK' && attacker.baseStats.id === 'wind' && attacker.shieldRounds > 0) {
+      skillMod = 2.0;
+      notes.push('🌪️ Reflexo: +1 golpe sob escudo');
     }
 
     // Effective ATK
@@ -138,11 +145,11 @@ export class BattleEngine {
       notes.push('🪨 Roleta Rocha (+20% DEF Terra)');
     }
 
-    // Base damage formula. Global +15% so matches don't stall against high DEF (Earth).
-    const GLOBAL_DAMAGE_MULT = 1.15;
+    // Base damage formula. Global +15% and another +10% on every hit, keeping each cat's own ratios.
+    const GLOBAL_DAMAGE_MULT = 1.15 * 1.1;
     const rawAtkTotal = effectiveAtk * elementMult * arenaMod * synergyMod * sectorMod * skillMod;
     let baseDmg = (rawAtkTotal - effectiveDef * 0.4) * GLOBAL_DAMAGE_MULT;
-    baseDmg = Math.max(29, baseDmg); // Minimum scratch damage (25 * 1.15)
+    baseDmg = Math.max(32, baseDmg);
 
     // Check Dodge
     let effectiveDodge = defender.dodge;
@@ -198,13 +205,15 @@ export class BattleEngine {
       notes.push('💥 GOLPE CRÍTICO!');
     }
 
-    // ⚡ DESPERATION POWER: 2x damage when HP <= 10% and not triggered yet (1 time per match)
-    // Even if healed afterwards, hasTriggeredDesperation prevents reuse!
+    // Finisher when HP <= 20%, once per match. Wind tears for 3x; every other cat for 2x.
     const hpRatio = attacker.currentHp / attacker.maxHp;
-    const isDesperation = hpRatio <= 0.10 && !attacker.hasTriggeredDesperation && (action === 'ATTACK' || action === 'SPECIAL');
+    const isDesperation = hpRatio <= 0.20 && !attacker.hasTriggeredDesperation && (action === 'ATTACK' || action === 'SPECIAL');
+    const desperationMult = attacker.baseStats.id === 'wind' ? 3 : 2;
     if (isDesperation) {
-      baseDmg *= 2.0;
-      notes.push(`⚡ PODER DESTRUTIVO: [${attacker.baseStats.desperationName}] - DOBRO DE DANO (2x)!`);
+      baseDmg *= desperationMult;
+      notes.push(
+        `⚡ PODER DESTRUTIVO: [${attacker.baseStats.desperationName}] - ${desperationMult}X DE DANO!`
+      );
     }
 
     // Earth Cat Taunt protection check:
@@ -329,12 +338,9 @@ export class BattleEngine {
     }
 
     // Normal & Hard AI: Tactical evaluation
-    // 1. Check if an ally has critically low HP (< 30%) and heal is available
-    if (!usedHealThisRound) {
-      const criticalAlly = livingBots.find((b) => b.currentHp / b.maxHp < 0.35);
-      if (criticalAlly && (difficulty === 'HARD' || Math.random() > 0.3)) {
-        return { action: 'HEAL', targetId: criticalAlly.instanceId };
-      }
+    // 1. Shared heal (3 per match) is always self-heal, same as the player
+    if (!usedHealThisRound && botCat.currentHp / botCat.maxHp < 0.35 && (difficulty === 'HARD' || Math.random() > 0.3)) {
+      return { action: 'HEAL', targetId: botCat.instanceId };
     }
 
     // 2. Check if Earth Cat can activate Taunt / Shield when team is under threat

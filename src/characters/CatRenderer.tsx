@@ -19,6 +19,7 @@ interface CatRendererProps {
   flipX?: boolean; // True for player facing right, false for bot facing left
   hasActedThisRound?: boolean;
   strike?: StrikeMotion | null;
+  giantClaw?: 2 | 3 | null;
   anchorRef?: (node: HTMLDivElement | null) => void;
   advantageTag?: {
     text: string;
@@ -36,10 +37,17 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
   flipX = false,
   hasActedThisRound = false,
   strike = null,
+  giantClaw = null,
   anchorRef,
   advantageTag,
 }) => {
   const { element, id } = cat.baseStats;
+  const catFace: CatFace =
+    !cat.isAlive || cat.animState === 'hurt'
+      ? 'hurt'
+      : cat.animState === 'attacking' && cat.currentHp / cat.maxHp <= 0.2
+      ? 'fury'
+      : 'idle';
 
   // Compute CSS animation based on animState
   let motionClasses = 'transition-transform duration-300 ease-out';
@@ -173,14 +181,14 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
           </div>
         )}
 
-        {/* ⚡ PODER DESTRUTIVO (≤ 10% HP) - AURA DEVASTADORA */}
-        {cat.isAlive && (cat.currentHp / cat.maxHp <= 0.10) && !cat.hasTriggeredDesperation && (
+        {/* ⚡ PODER DESTRUTIVO (≤ 20% HP) - AURA DEVASTADORA */}
+        {cat.isAlive && (cat.currentHp / cat.maxHp <= 0.20) && !cat.hasTriggeredDesperation && (
           <>
             <div className="absolute inset-0 z-20 rounded-2xl border-2 border-rose-500 animate-desperation-flame pointer-events-none" />
             <div className="absolute -top-4 inset-x-0 flex justify-center z-30 pointer-events-none">
               <span className="bg-gradient-to-r from-rose-600 via-red-600 to-amber-500 text-white font-heading font-black text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full border border-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.9)] flex items-center gap-1 animate-desperation-text tracking-wider uppercase">
                 <Zap className="w-3 h-3 text-yellow-300 animate-bounce" />
-                <span>2X DANO!</span>
+                <span>{cat.baseStats.id === 'wind' ? '3X DANO!' : '2X DANO!'}</span>
               </span>
             </div>
           </>
@@ -209,8 +217,9 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
               flipX ? '' : 'scale-x-[-1]'
             } ${strike ? '' : motionClasses}`}
           >
-            <CatArtRenderer catId={id} element={element} />
-            {strike?.showPaw && <PawSlap />}
+            <CatArtRenderer catId={id} element={element} face={catFace} />
+            {strike?.showPaw && !giantClaw && <PawSlap />}
+            {giantClaw && <GiantClaw multiplier={giantClaw} element={element} />}
           </div>
         </div>
       </div>
@@ -277,6 +286,45 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
   );
 };
 
+const PAW_TONES: Record<ElementType, { fur: string; furDark: string; stripe: string; pad: string; claw: string; burst: string; lion: boolean }> = {
+  FOGO: { fur: '#ea580c', furDark: '#9a3412', stripe: '#1c1917', pad: '#fde68a', claw: '#f8fafc', burst: 'rgba(249,115,22,0.35)', lion: false },
+  ÁGUA: { fur: '#0369a1', furDark: '#0c4a6e', stripe: '#082f49', pad: '#e0f2fe', claw: '#f8fafc', burst: 'rgba(14,165,233,0.35)', lion: false },
+  VENTO: { fur: '#cbd5e1', furDark: '#64748b', stripe: '#334155', pad: '#ecfdf5', claw: '#f8fafc', burst: 'rgba(52,211,153,0.35)', lion: false },
+  TERRA: { fur: '#ca8a04', furDark: '#78350f', stripe: '#451a03', pad: '#fef3c7', claw: '#f8fafc', burst: 'rgba(202,138,4,0.4)', lion: true },
+};
+
+const GiantClaw = ({ multiplier, element }: { multiplier: 2 | 3; element: ElementType }) => {
+  const tone = PAW_TONES[element] ?? PAW_TONES.FOGO;
+  return (
+    <div className="absolute left-1/2 top-1/2 z-50 w-[260%] h-[260%] -translate-x-1/2 -translate-y-1/2 pointer-events-none" aria-hidden>
+      <div className="absolute inset-0 rounded-full blur-md animate-claw-burst" style={{ background: tone.burst }} />
+      <svg viewBox="0 0 200 200" className="w-full h-full animate-giant-paw drop-shadow-[0_16px_18px_rgba(0,0,0,0.6)]">
+        <path d="M 28 118 C 18 78 48 48 96 44 C 150 40 188 78 176 124 C 166 160 120 176 78 168 C 42 160 36 142 28 118 Z" fill={tone.fur} />
+        {!tone.lion && (
+          <>
+            <path d="M 70 52 C 78 70 74 92 62 96" fill="none" stroke={tone.stripe} strokeWidth="7" strokeLinecap="round" />
+            <path d="M 108 48 C 116 70 112 96 100 102" fill="none" stroke={tone.stripe} strokeWidth="7" strokeLinecap="round" />
+            <path d="M 146 62 C 150 84 142 108 130 112" fill="none" stroke={tone.stripe} strokeWidth="6" strokeLinecap="round" />
+          </>
+        )}
+        {tone.lion && <path d="M 40 96 C 24 78 30 58 52 62 C 36 74 38 92 48 104" fill={tone.furDark} />}
+        <ellipse cx="78" cy="128" rx="28" ry="22" fill={tone.pad} stroke={tone.furDark} strokeWidth="3" />
+        <ellipse cx="46" cy="86" rx="13" ry="16" fill={tone.pad} stroke={tone.furDark} strokeWidth="2.5" transform="rotate(-24 46 86)" />
+        <ellipse cx="78" cy="70" rx="13" ry="17" fill={tone.pad} stroke={tone.furDark} strokeWidth="2.5" />
+        <ellipse cx="112" cy="74" rx="12" ry="16" fill={tone.pad} stroke={tone.furDark} strokeWidth="2.5" transform="rotate(16 112 74)" />
+        <ellipse cx="142" cy="92" rx="11" ry="15" fill={tone.pad} stroke={tone.furDark} strokeWidth="2.5" transform="rotate(28 142 92)" />
+        <path d="M 38 68 C 30 48 36 34 44 42 C 40 56 42 66 46 74" fill={tone.claw} stroke="#0f172a" strokeWidth="1.5" />
+        <path d="M 72 48 C 68 26 78 16 86 26 C 80 40 78 54 80 64" fill={tone.claw} stroke="#0f172a" strokeWidth="1.5" />
+        <path d="M 112 50 C 114 28 126 18 132 30 C 124 44 118 56 116 66" fill={tone.claw} stroke="#0f172a" strokeWidth="1.5" />
+        <path d="M 146 66 C 156 46 170 42 168 56 C 160 68 150 76 144 84" fill={tone.claw} stroke="#0f172a" strokeWidth="1.5" />
+        <path className="claw-mark" d="M 118 18 C 132 48 140 86 128 150" />
+        <path className="claw-mark claw-mark-delay" d="M 138 12 C 156 46 164 90 148 154" />
+        {multiplier === 3 && <path className="claw-mark claw-mark-late" d="M 156 22 C 176 58 182 98 162 158" />}
+      </svg>
+    </div>
+  );
+};
+
 const PawSlap = () => (
   <svg
     viewBox="0 0 64 64"
@@ -291,25 +339,49 @@ const PawSlap = () => (
   </svg>
 );
 
+type CatFace = 'idle' | 'fury' | 'hurt';
+
+const CatMouth = ({ face, tone }: { face: CatFace; tone: string }) => {
+  if (face === 'idle') return null;
+  if (face === 'fury') {
+    return (
+      <g className="expr-part expr-roar">
+        <path d="M 196 97 Q 204 114 213 97 Q 204 108 196 97 Z" fill="#1c1917" />
+        <path d="M 198 99 L 201 102 L 205 98 L 209 102 L 212 99" fill="none" stroke="#f8fafc" strokeWidth="1.15" strokeLinejoin="round" />
+        <ellipse cx="204" cy="107" rx="3.4" ry="1.7" fill="#fb7185" />
+      </g>
+    );
+  }
+  return (
+    <path
+      d="M 197 104 Q 201 98 205 104 Q 209 110 213 104"
+      fill="none"
+      stroke={tone}
+      strokeWidth="2.1"
+      strokeLinecap="round"
+    />
+  );
+};
+
 // Vector SVG renderer that matches the user's reference image for each cat
-const CatArtRenderer: React.FC<{ catId: string; element: ElementType }> = ({ catId, element }) => {
+const CatArtRenderer: React.FC<{ catId: string; element: ElementType; face: CatFace }> = ({ catId, face }) => {
   switch (catId) {
     case 'fire':
-      return <FireCatArt />;
+      return <FireCatArt face={face} />;
     case 'water':
-      return <WaterCatArt />;
+      return <WaterCatArt face={face} />;
     case 'wind':
-      return <WindCatArt />;
+      return <WindCatArt face={face} />;
     case 'earth':
-      return <EarthCatArt />;
+      return <EarthCatArt face={face} />;
     default:
-      return <FireCatArt />;
+      return <FireCatArt face={face} />;
   }
 };
 
 // FIRE CAT (Gato de Fogo): Orange/red muscular coat, blazing tail, flame paws, glowing amber eyes
-const FireCatArt = () => (
-  <svg viewBox="0 0 240 180" className="w-full h-full drop-shadow-md">
+const FireCatArt = ({ face }: { face: CatFace }) => (
+  <svg viewBox="0 0 240 180" className="cat-expr w-full h-full drop-shadow-md">
     <defs>
       <linearGradient id="fireBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#f97316" />
@@ -330,19 +402,19 @@ const FireCatArt = () => (
       </filter>
     </defs>
 
-    {/* Blazing Bushy Tail arching upward */}
-    <path
-      d="M 65 95 C 40 85 20 60 25 35 C 30 15 55 10 70 25 C 80 35 75 55 60 65 C 50 72 45 80 55 88 Z"
-      fill="url(#fireTailGrad)"
-      filter="url(#fireGlow)"
-    />
-    <path
-      d="M 50 45 C 38 30 52 15 65 20 C 72 25 65 40 50 45 Z"
-      fill="#fef08a"
-    />
-    {/* Dancing flame tongues on tail */}
-    <path d="M 22 45 Q 12 35 26 28 Q 18 20 30 18" fill="none" stroke="#f59e0b" strokeWidth="3" />
-    <path d="M 38 18 Q 45 8 55 12" fill="none" stroke="#fef08a" strokeWidth="2.5" />
+    <g className="expr-part expr-fire-tail">
+      <path
+        d="M 65 95 C 40 85 20 60 25 35 C 30 15 55 10 70 25 C 80 35 75 55 60 65 C 50 72 45 80 55 88 Z"
+        fill="url(#fireTailGrad)"
+        filter="url(#fireGlow)"
+      />
+      <path
+        d="M 50 45 C 38 30 52 15 65 20 C 72 25 65 40 50 45 Z"
+        fill="#fef08a"
+      />
+      <path className="expr-part expr-fire-tongue" d="M 22 45 Q 12 35 26 28 Q 18 20 30 18" fill="none" stroke="#f59e0b" strokeWidth="3" />
+      <path className="expr-part expr-fire-tongue expr-fire-tongue-b" d="M 38 18 Q 45 8 55 12" fill="none" stroke="#fef08a" strokeWidth="2.5" />
+    </g>
 
     {/* Hind Leg Left */}
     <path d="M 70 95 Q 65 130 68 150 L 80 150 Q 82 135 88 115 Z" fill="#991b1b" />
@@ -382,11 +454,17 @@ const FireCatArt = () => (
     <polygon points="188,68 200,48 205,70" fill="#991b1b" />
     <polygon points="191,65 198,53 201,67" fill="#f59e0b" />
 
-    {/* Glowing Fierce Amber Eyes */}
-    <polygon points="182,78 190,75 185,82" fill="#fef08a" filter="url(#fireGlow)" />
-    <polygon points="196,80 204,78 199,84" fill="#fef08a" filter="url(#fireGlow)" />
-    <line x1="186" y1="76" x2="186" y2="81" stroke="#451a03" strokeWidth="1.5" />
-    <line x1="200" y1="78" x2="200" y2="83" stroke="#451a03" strokeWidth="1.5" />
+    <g className="expr-part expr-brows">
+      <line x1="176" y1="72" x2="190" y2="76" stroke="#451a03" strokeWidth="2.2" strokeLinecap="round" />
+      <line x1="194" y1="76" x2="206" y2="72" stroke="#451a03" strokeWidth="2.2" strokeLinecap="round" />
+    </g>
+    <g className={`expr-part expr-eyes expr-eyes-fire${face === 'hurt' ? ' expr-eyes-hurt' : ''}`}>
+      <polygon points="182,78 190,75 185,82" fill="#fef08a" filter="url(#fireGlow)" />
+      <polygon points="196,80 204,78 199,84" fill="#fef08a" filter="url(#fireGlow)" />
+      <line x1="186" y1="76" x2="186" y2="81" stroke="#451a03" strokeWidth="1.5" />
+      <line x1="200" y1="78" x2="200" y2="83" stroke="#451a03" strokeWidth="1.5" />
+    </g>
+    <CatMouth face={face} tone="#7c2d12" />
 
     {/* Whiskers & Flame Brows */}
     <line x1="202" y1="92" x2="220" y2="90" stroke="#f59e0b" strokeWidth="1.5" />
@@ -396,8 +474,8 @@ const FireCatArt = () => (
 );
 
 // WATER CAT (Gato de Água): Azure blue and white coat, wave spiral tail, golden paws, luminous blue eyes
-const WaterCatArt = () => (
-  <svg viewBox="0 0 240 180" className="w-full h-full drop-shadow-md">
+const WaterCatArt = ({ face }: { face: CatFace }) => (
+  <svg viewBox="0 0 240 180" className="cat-expr w-full h-full drop-shadow-md">
     <defs>
       <linearGradient id="waterBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#7dd3fc" />
@@ -418,17 +496,17 @@ const WaterCatArt = () => (
       </filter>
     </defs>
 
-    {/* Cresting Tidal Wave Tail */}
-    <path
-      d="M 65 95 C 45 80 20 50 35 25 C 48 5 80 15 85 40 C 88 55 75 70 58 70 C 45 70 48 50 62 48 C 68 47 70 55 65 58 Z"
-      fill="url(#waveTailGrad)"
-      filter="url(#waterGlow)"
-    />
-    {/* Foam swirl accents */}
-    <path d="M 40 28 Q 60 18 78 35" fill="none" stroke="#ffffff" strokeWidth="3" />
-    <circle cx="82" cy="42" r="3.5" fill="#e0f2fe" />
-    <circle cx="70" cy="22" r="2.5" fill="#e0f2fe" />
-    <circle cx="32" cy="38" r="2" fill="#e0f2fe" />
+    <g className="expr-part expr-water-tail">
+      <path
+        d="M 65 95 C 45 80 20 50 35 25 C 48 5 80 15 85 40 C 88 55 75 70 58 70 C 45 70 48 50 62 48 C 68 47 70 55 65 58 Z"
+        fill="url(#waveTailGrad)"
+        filter="url(#waterGlow)"
+      />
+      <path className="expr-part expr-water-foam" d="M 40 28 Q 60 18 78 35" fill="none" stroke="#ffffff" strokeWidth="3" />
+      <circle className="expr-part expr-water-foam" cx="82" cy="42" r="3.5" fill="#e0f2fe" />
+      <circle className="expr-part expr-water-foam" cx="70" cy="22" r="2.5" fill="#e0f2fe" />
+      <circle className="expr-part expr-water-foam" cx="32" cy="38" r="2" fill="#e0f2fe" />
+    </g>
 
     {/* Hind Leg Left */}
     <path d="M 72 95 Q 68 128 72 150 L 84 150 Q 86 130 92 110 Z" fill="#0284c7" />
@@ -476,11 +554,17 @@ const WaterCatArt = () => (
     <polygon points="188,68 198,50 204,70" fill="#0284c7" />
     <polygon points="191,65 197,54 200,67" fill="#bae6fd" />
 
-    {/* Luminous Aqua-Blue Eyes */}
-    <ellipse cx="184" cy="78" rx="4.5" ry="5.5" fill="#e0f2fe" filter="url(#waterGlow)" />
-    <ellipse cx="198" cy="80" rx="4" ry="5" fill="#e0f2fe" filter="url(#waterGlow)" />
-    <ellipse cx="184" cy="78" rx="2" ry="4" fill="#0369a1" />
-    <ellipse cx="198" cy="80" rx="1.8" ry="3.5" fill="#0369a1" />
+    <g className="expr-part expr-brows">
+      <line x1="176" y1="72" x2="190" y2="76" stroke="#075985" strokeWidth="2" strokeLinecap="round" />
+      <line x1="194" y1="76" x2="206" y2="72" stroke="#075985" strokeWidth="2" strokeLinecap="round" />
+    </g>
+    <g className={`expr-part expr-eyes expr-eyes-water${face === 'hurt' ? ' expr-eyes-hurt' : ''}`}>
+      <ellipse cx="184" cy="78" rx="4.5" ry="5.5" fill="#e0f2fe" filter="url(#waterGlow)" />
+      <ellipse cx="198" cy="80" rx="4" ry="5" fill="#e0f2fe" filter="url(#waterGlow)" />
+      <ellipse cx="184" cy="78" rx="2" ry="4" fill="#0369a1" />
+      <ellipse cx="198" cy="80" rx="1.8" ry="3.5" fill="#0369a1" />
+    </g>
+    <CatMouth face={face} tone="#075985" />
 
     {/* Whiskers */}
     <line x1="202" y1="92" x2="222" y2="88" stroke="#e0f2fe" strokeWidth="1.5" />
@@ -490,8 +574,8 @@ const WaterCatArt = () => (
 );
 
 // WIND CAT (Gato de Vento): Silver/white fur, cloud cyclone tail, wing-like ear tufts, cyan eyes
-const WindCatArt = () => (
-  <svg viewBox="0 0 240 180" className="w-full h-full drop-shadow-md">
+const WindCatArt = ({ face }: { face: CatFace }) => (
+  <svg viewBox="0 0 240 180" className="cat-expr w-full h-full drop-shadow-md">
     <defs>
       <linearGradient id="windBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#f8fafc" />
@@ -512,15 +596,17 @@ const WindCatArt = () => (
       </filter>
     </defs>
 
-    {/* Billowing Cloud Cyclone Tail */}
-    <path
-      d="M 65 95 C 45 85 20 65 25 40 C 30 18 55 15 72 32 C 85 45 78 68 60 70 C 45 72 38 52 52 45 C 60 40 68 50 62 55 Z"
-      fill="url(#cloudTailGrad)"
-      filter="url(#windGlow)"
-    />
-    {/* Wind swirl curves on tail */}
-    <path d="M 32 45 Q 40 25 60 28 Q 72 30 70 45" fill="none" stroke="#6ee7b7" strokeWidth="2.5" />
-    <path d="M 45 58 Q 55 45 62 50" fill="none" stroke="#6ee7b7" strokeWidth="2" />
+    <g className="expr-part expr-wind-tail">
+      <path
+        d="M 65 95 C 45 85 20 65 25 40 C 30 18 55 15 72 32 C 85 45 78 68 60 70 C 45 72 38 52 52 45 C 60 40 68 50 62 55 Z"
+        fill="url(#cloudTailGrad)"
+        filter="url(#windGlow)"
+      />
+      <path className="expr-part expr-wind-wisp" d="M 32 45 Q 40 25 60 28 Q 72 30 70 45" fill="none" stroke="#6ee7b7" strokeWidth="2.5" />
+      <path className="expr-part expr-wind-wisp expr-wind-wisp-b" d="M 45 58 Q 55 45 62 50" fill="none" stroke="#6ee7b7" strokeWidth="2" />
+      <ellipse className="expr-part expr-wind-wisp" cx="28" cy="36" rx="7" ry="4" fill="#f8fafc" opacity="0.7" />
+      <ellipse className="expr-part expr-wind-wisp expr-wind-wisp-b" cx="18" cy="24" rx="5" ry="3" fill="#e2e8f0" opacity="0.6" />
+    </g>
 
     {/* Hind Leg Left */}
     <path d="M 72 95 Q 68 128 72 150 L 84 150 Q 86 130 92 110 Z" fill="#94a3b8" />
@@ -564,11 +650,17 @@ const WindCatArt = () => (
     <path d="M 160 92 Q 150 90 148 82 Q 155 86 162 88" fill="#e2e8f0" />
     <path d="M 158 98 Q 146 98 144 92 Q 152 94 160 95" fill="#e2e8f0" />
 
-    {/* Luminous Emerald Eyes */}
-    <ellipse cx="184" cy="78" rx="4.5" ry="5.5" fill="#34d399" filter="url(#windGlow)" />
-    <ellipse cx="198" cy="80" rx="4" ry="5" fill="#34d399" filter="url(#windGlow)" />
-    <ellipse cx="184" cy="78" rx="2" ry="4" fill="#065f46" />
-    <ellipse cx="198" cy="80" rx="1.8" ry="3.5" fill="#065f46" />
+    <g className="expr-part expr-brows">
+      <line x1="176" y1="72" x2="190" y2="76" stroke="#334155" strokeWidth="2" strokeLinecap="round" />
+      <line x1="194" y1="76" x2="206" y2="72" stroke="#334155" strokeWidth="2" strokeLinecap="round" />
+    </g>
+    <g className={`expr-part expr-eyes expr-eyes-wind${face === 'hurt' ? ' expr-eyes-hurt' : ''}`}>
+      <ellipse cx="184" cy="78" rx="4.5" ry="5.5" fill="#34d399" filter="url(#windGlow)" />
+      <ellipse cx="198" cy="80" rx="4" ry="5" fill="#34d399" filter="url(#windGlow)" />
+      <ellipse cx="184" cy="78" rx="2" ry="4" fill="#065f46" />
+      <ellipse cx="198" cy="80" rx="1.8" ry="3.5" fill="#065f46" />
+    </g>
+    <CatMouth face={face} tone="#334155" />
 
     {/* Whiskers */}
     <line x1="202" y1="92" x2="222" y2="88" stroke="#94a3b8" strokeWidth="1.5" />
@@ -578,8 +670,8 @@ const WindCatArt = () => (
 );
 
 // EARTH CAT (Gato de Terra): Mossy green-brown coat, craggy rock tail, root runes on legs, resolute gaze
-const EarthCatArt = () => (
-  <svg viewBox="0 0 240 180" className="w-full h-full drop-shadow-md">
+const EarthCatArt = ({ face }: { face: CatFace }) => (
+  <svg viewBox="0 0 240 180" className="cat-expr w-full h-full drop-shadow-md">
     <defs>
       <linearGradient id="earthBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#84cc16" />
@@ -593,13 +685,15 @@ const EarthCatArt = () => (
       </linearGradient>
     </defs>
 
-    {/* Craggy Layered Rock Tail */}
-    <polygon points="65,95 45,82 30,60 48,50 62,75" fill="#78350f" />
-    <polygon points="48,50 25,40 15,22 35,15 50,35" fill="url(#rockTailGrad)" />
-    <polygon points="35,15 22,5 40,2 52,18" fill="#ca8a04" />
-    {/* Rock facets and fissures */}
-    <line x1="30" y1="60" x2="48" y2="50" stroke="#451a03" strokeWidth="2" />
-    <line x1="25" y1="40" x2="35" y2="15" stroke="#451a03" strokeWidth="2" />
+    <g className="expr-part expr-earth-tail">
+      <polygon points="65,95 45,82 30,60 48,50 62,75" fill="#78350f" />
+      <polygon points="48,50 25,40 15,22 35,15 50,35" fill="url(#rockTailGrad)" />
+      <g className="expr-part expr-earth-tip">
+        <polygon points="35,15 22,5 40,2 52,18" fill="#ca8a04" />
+      </g>
+      <line x1="30" y1="60" x2="48" y2="50" stroke="#451a03" strokeWidth="2" />
+      <line x1="25" y1="40" x2="35" y2="15" stroke="#451a03" strokeWidth="2" />
+    </g>
 
     {/* Hind Leg Left */}
     <path d="M 72 95 Q 68 128 72 150 L 86 150 Q 88 130 94 110 Z" fill="#451a03" />
@@ -641,14 +735,17 @@ const EarthCatArt = () => (
     <polygon points="190,68 200,50 206,70" fill="#451a03" />
     <polygon points="193,65 199,55 202,67" fill="#ca8a04" />
 
-    {/* Stern Brow & Glowing Amber Eyes */}
-    <line x1="178" y1="74" x2="190" y2="76" stroke="#451a03" strokeWidth="2.5" strokeLinecap="round" />
-    <line x1="194" y1="76" x2="204" y2="74" stroke="#451a03" strokeWidth="2.5" strokeLinecap="round" />
-
-    <polygon points="182,78 189,76 186,83" fill="#facc15" />
-    <polygon points="196,78 203,76 200,83" fill="#facc15" />
-    <line x1="185" y1="77" x2="185" y2="82" stroke="#451a03" strokeWidth="1.5" />
-    <line x1="199" y1="77" x2="199" y2="82" stroke="#451a03" strokeWidth="1.5" />
+    <g className="expr-part expr-brows">
+      <line x1="178" y1="74" x2="190" y2="76" stroke="#451a03" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="194" y1="76" x2="204" y2="74" stroke="#451a03" strokeWidth="2.5" strokeLinecap="round" />
+    </g>
+    <g className={`expr-part expr-eyes expr-eyes-earth${face === 'hurt' ? ' expr-eyes-hurt' : ''}`}>
+      <polygon points="182,78 189,76 186,83" fill="#facc15" />
+      <polygon points="196,78 203,76 200,83" fill="#facc15" />
+      <line x1="185" y1="77" x2="185" y2="82" stroke="#451a03" strokeWidth="1.5" />
+      <line x1="199" y1="77" x2="199" y2="82" stroke="#451a03" strokeWidth="1.5" />
+    </g>
+    <CatMouth face={face} tone="#451a03" />
 
     {/* Whiskers */}
     <line x1="202" y1="92" x2="220" y2="90" stroke="#ca8a04" strokeWidth="1.5" />

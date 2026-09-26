@@ -46,7 +46,7 @@ export interface CatCombatant {
   burnPower: number;    // % damage per round (e.g. 5 or 10)
   waterSpecialUses: number; // Tracks healing decay for Water Cat
   hasTriggeredWaterPassive: boolean; // 50% HP threshold triggered
-  hasTriggeredDesperation: boolean; // True once triggered or once HP falls to <= 10%, never re-arms even if healed!
+  hasTriggeredDesperation: boolean; // True once triggered or once HP falls to <= 20%, never re-arms even if healed!
   isAlive: boolean;
   xp: number;
   animState: 'idle' | 'attacking' | 'hurt' | 'dodging' | 'fainted' | 'casting';

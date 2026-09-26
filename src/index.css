@@ -146,6 +146,56 @@
   transform-origin: 70% 80%;
 }
 
+@keyframes giant-paw-scratch {
+  0% { opacity: 0; transform: translate(28%, -42%) rotate(-32deg) scale(0.35); }
+  16% { opacity: 1; transform: translate(4%, -8%) rotate(-10deg) scale(1.05); }
+  38% { transform: translate(-18%, 16%) rotate(16deg) scale(1.28); }
+  55% { transform: translate(8%, -2%) rotate(-14deg) scale(1.12); }
+  74% { transform: translate(-24%, 22%) rotate(20deg) scale(1.34); }
+  100% { opacity: 0; transform: translate(-8%, 8%) rotate(6deg) scale(1.05); }
+}
+
+@keyframes claw-burst {
+  0% { opacity: 0; transform: scale(0.4); }
+  25% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+@keyframes claw-cut {
+  0% { stroke-dashoffset: 140; opacity: 0; }
+  25% { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0.95; }
+}
+
+.animate-giant-paw {
+  animation: giant-paw-scratch 0.85s cubic-bezier(0.16, 0.8, 0.2, 1) forwards;
+  transform-origin: 30% 70%;
+}
+
+.animate-claw-burst {
+  animation: claw-burst 0.85s ease-out forwards;
+}
+
+.claw-mark {
+  fill: none;
+  stroke: #fecaca;
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 140;
+  filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.9));
+  animation: claw-cut 0.45s ease-out 0.18s forwards;
+}
+
+.claw-mark-delay {
+  animation-delay: 0.32s;
+  stroke: #fff1f2;
+}
+
+.claw-mark-late {
+  animation-delay: 0.48s;
+  stroke: #fb7185;
+}
+
 @keyframes sunburst-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -224,6 +274,134 @@
 
 .animate-desperation-text {
   animation: desperation-text-pulse 1s infinite ease-in-out;
+}
+
+/* Living expressions: blink, fury brows, elemental tails */
+.cat-expr .expr-part {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.cat-expr .expr-eyes {
+  animation: cat-blink 4s infinite;
+}
+
+.cat-expr .expr-eyes-fire { animation-duration: 3.4s; }
+.cat-expr .expr-eyes-water { animation-duration: 4.6s; }
+.cat-expr .expr-eyes-wind { animation-duration: 3.1s; }
+.cat-expr .expr-eyes-hurt {
+  animation: none;
+  transform: scaleY(0.32);
+}
+
+.cat-expr .expr-roar {
+  transform-origin: center;
+  animation: roar-mouth 0.22s ease-in-out infinite;
+}
+
+@keyframes roar-mouth {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.08, 1.22); }
+}
+
+.cat-expr .expr-brows {
+  animation: fury-brow 1.8s ease-in-out infinite;
+}
+
+.cat-expr .expr-fire-tail {
+  transform-origin: 82% 92%;
+  animation: fire-tail 0.48s ease-in-out infinite;
+}
+
+.cat-expr .expr-fire-tongue {
+  transform-origin: 70% 100%;
+  animation: fire-lick 0.36s ease-in-out infinite;
+}
+
+.cat-expr .expr-fire-tongue-b { animation-delay: 0.18s; }
+
+.cat-expr .expr-water-tail {
+  transform-origin: 88% 94%;
+  animation: water-sway 1.5s ease-in-out infinite;
+}
+
+.cat-expr .expr-water-foam {
+  animation: foam-bob 1.5s ease-in-out infinite;
+}
+
+.cat-expr .expr-wind-tail {
+  transform-origin: 90% 96%;
+  animation: smoke-tail 2s ease-in-out infinite;
+}
+
+.cat-expr .expr-wind-wisp {
+  transform-origin: center;
+  animation: smoke-wisp 1.7s ease-out infinite;
+}
+
+.cat-expr .expr-wind-wisp-b { animation-delay: 0.55s; }
+
+.cat-expr .expr-earth-tail {
+  transform-origin: 100% 100%;
+  animation: earth-sway 2.2s ease-in-out infinite;
+}
+
+.cat-expr .expr-earth-tip {
+  transform-origin: center;
+  animation: earth-spin 1.6s linear infinite;
+}
+
+@keyframes cat-blink {
+  0%, 86%, 94%, 100% { transform: scaleY(1); }
+  90% { transform: scaleY(0.08); }
+}
+
+@keyframes fury-brow {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(0.6px) rotate(-2deg); }
+}
+
+@keyframes fire-tail {
+  0%, 100% { transform: rotate(-7deg) scale(1, 1); }
+  30% { transform: rotate(5deg) scale(1.08, 0.92); }
+  60% { transform: rotate(-3deg) scale(0.96, 1.1); }
+}
+
+@keyframes fire-lick {
+  0%, 100% { transform: translateY(0) scaleY(1); opacity: 0.85; }
+  50% { transform: translateY(-4px) scaleY(1.25); opacity: 1; }
+}
+
+@keyframes water-sway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(7deg); }
+}
+
+@keyframes foam-bob {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-2px, -3px); }
+}
+
+@keyframes smoke-tail {
+  0% { transform: rotate(-3deg) translate(0, 0) scale(1); opacity: 0.95; }
+  50% { transform: rotate(4deg) translate(-3px, -6px) scale(1.05); opacity: 0.7; }
+  100% { transform: rotate(-2deg) translate(-1px, -2px) scale(0.98); opacity: 0.95; }
+}
+
+@keyframes smoke-wisp {
+  0% { transform: translate(0, 4px) scale(0.7); opacity: 0; }
+  25% { opacity: 0.8; }
+  100% { transform: translate(-10px, -16px) scale(1.35); opacity: 0; }
+}
+
+@keyframes earth-sway {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
+}
+
+@keyframes earth-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Custom scrollbars for battle log and team selector */

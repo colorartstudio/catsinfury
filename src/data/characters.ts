@@ -20,7 +20,7 @@ export const CAT_CHARACTERS: Record<string, BaseCatStats> = {
     passiveName: 'Combustão Contínua',
     passiveDescription: 'Ataques básicos aplicam Queimadura (Burn) por 2 rodadas (5% do HP max do alvo).',
     desperationName: 'Cataclismo Solar',
-    desperationDescription: 'Ao ficar com ≤ 10% de HP, liberta uma erupção solar devastadora causando 2x de dano (uso único).',
+    desperationDescription: 'Ao ficar com ≤ 20% de HP, liberta uma erupção solar devastadora causando 2x de dano (uso único).',
   },
   water: {
     id: 'water',
@@ -37,11 +37,11 @@ export const CAT_CHARACTERS: Record<string, BaseCatStats> = {
     accentColor: '#38bdf8',
     description: 'Tranquilo, inteligente e mágico. Pelagem azul e branca com cauda em onda líquida e patas douradas.',
     specialName: 'Maré Restauradora',
-    specialDescription: 'Cura 20% do HP próprio na 1ª vez. Reduz em 20% a eficiência a cada uso subsequente.',
+    specialDescription: 'Acerta o alvo e cura 20% do HP próprio na 1ª vez. Reduz em 20% a eficiência da cura a cada uso subsequente.',
     passiveName: 'Fonte da Vida',
     passiveDescription: 'Ao cair para 50% ou menos de HP, recupera instantaneamente 10% de HP.',
     desperationName: 'Tsunami Abissal',
-    desperationDescription: 'Ao ficar com ≤ 10% de HP, conjura um vórtice hidrocinético que esmaga o oponente com 2x de dano (uso único).',
+    desperationDescription: 'Ao ficar com ≤ 20% de HP, conjura um vórtice hidrocinético que esmaga o oponente com 2x de dano (uso único).',
   },
   wind: {
     id: 'wind',
@@ -62,7 +62,7 @@ export const CAT_CHARACTERS: Record<string, BaseCatStats> = {
     passiveName: 'Esquiva Eólica & Reflexo',
     passiveDescription: '22% de esquiva base. Ao esquivar, recebe apenas 50% do dano. Sob escudo, ataque básico ganha +1 hit.',
     desperationName: 'Vórtice dos Mil Cortes',
-    desperationDescription: 'Ao ficar com ≤ 10% de HP, quebra a barreira do som dilacerando com 2x de dano (uso único).',
+    desperationDescription: 'Ao ficar com ≤ 20% de HP, quebra a barreira do som e desfere 3x de dano com um arranhão devastador (uso único).',
   },
   earth: {
     id: 'earth',
@@ -83,7 +83,7 @@ export const CAT_CHARACTERS: Record<string, BaseCatStats> = {
     passiveName: 'Pele de Pedra',
     passiveDescription: 'Maior Defesa e Vida da arena. Alta absorção de dano físico.',
     desperationName: 'Fissura Sísmica Titânica',
-    desperationDescription: 'Ao ficar com ≤ 10% de HP, parte a terra num choque sísmico que inflige 2x de dano (uso único).',
+    desperationDescription: 'Ao ficar com ≤ 20% de HP, parte a terra num choque sísmico que inflige 2x de dano (uso único).',
   },
 };
 
