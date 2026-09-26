@@ -2,6 +2,13 @@ import React from 'react';
 import { CatCombatant, ElementType } from '../types';
 import { Shield, Flame, Eye, Target, Zap } from 'lucide-react';
 
+export interface StrikeMotion {
+  dx: number;
+  dy: number;
+  phase: 'go' | 'back';
+  showPaw: boolean;
+}
+
 interface CatRendererProps {
   cat: CatCombatant;
   isTargeted?: boolean;
@@ -11,6 +18,8 @@ interface CatRendererProps {
   onSelectAttacker?: () => void;
   flipX?: boolean; // True for player facing right, false for bot facing left
   hasActedThisRound?: boolean;
+  strike?: StrikeMotion | null;
+  anchorRef?: (node: HTMLDivElement | null) => void;
   advantageTag?: {
     text: string;
     type: 'advantage' | 'disadvantage' | 'neutral';
@@ -26,6 +35,8 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
   onSelectAttacker,
   flipX = false,
   hasActedThisRound = false,
+  strike = null,
+  anchorRef,
   advantageTag,
 }) => {
   const { element, id } = cat.baseStats;
@@ -175,13 +186,32 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
           </>
         )}
 
-        {/* The Animated Elemental Cat SVG */}
+        {/* The Animated Elemental Cat SVG — lunges out of its slot to strike the target */}
         <div
-          className={`w-full h-full flex items-center justify-center transform ${
-            flipX ? '' : 'scale-x-[-1]'
-          } ${motionClasses}`}
+          ref={anchorRef}
+          className="relative w-full h-full"
+          style={
+            strike
+              ? {
+                  transform:
+                    strike.phase === 'go'
+                      ? `translate(${strike.dx}px, ${strike.dy}px) scale(1.14) rotate(${flipX ? -7 : 7}deg)`
+                      : 'translate(0px, 0px) scale(1) rotate(0deg)',
+                  transition: 'transform 0.32s cubic-bezier(0.16, 0.82, 0.24, 1)',
+                  zIndex: 40,
+                  filter: 'drop-shadow(0 14px 6px rgba(0,0,0,0.45))',
+                }
+              : undefined
+          }
         >
-          <CatArtRenderer catId={id} element={element} />
+          <div
+            className={`relative w-full h-full flex items-center justify-center ${
+              flipX ? '' : 'scale-x-[-1]'
+            } ${strike ? '' : motionClasses}`}
+          >
+            <CatArtRenderer catId={id} element={element} />
+            {strike?.showPaw && <PawSlap />}
+          </div>
         </div>
       </div>
 
@@ -246,6 +276,20 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
     </div>
   );
 };
+
+const PawSlap = () => (
+  <svg
+    viewBox="0 0 64 64"
+    className="absolute -right-[18%] top-[6%] w-[48%] h-[48%] animate-paw-slap pointer-events-none z-50 drop-shadow-lg"
+    aria-hidden
+  >
+    <ellipse cx="24" cy="40" rx="16" ry="13" fill="#f8fafc" stroke="#0f172a" strokeWidth="2.5" />
+    <ellipse cx="14" cy="22" rx="6" ry="8" fill="#f8fafc" stroke="#0f172a" strokeWidth="2.2" transform="rotate(-18 14 22)" />
+    <ellipse cx="26" cy="16" rx="5.5" ry="8" fill="#f8fafc" stroke="#0f172a" strokeWidth="2.2" />
+    <ellipse cx="37" cy="20" rx="5.5" ry="7.5" fill="#f8fafc" stroke="#0f172a" strokeWidth="2.2" transform="rotate(16 37 20)" />
+    <ellipse cx="18" cy="42" rx="4" ry="3" fill="#fdba74" opacity="0.85" />
+  </svg>
+);
 
 // Vector SVG renderer that matches the user's reference image for each cat
 const CatArtRenderer: React.FC<{ catId: string; element: ElementType }> = ({ catId, element }) => {

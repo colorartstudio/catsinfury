@@ -9,7 +9,7 @@ import {
   RouletteSector,
   TeamSynergy,
 } from '../types';
-import { CatRenderer } from '../characters/CatRenderer';
+import { CatRenderer, StrikeMotion } from '../characters/CatRenderer';
 import { ParticleCanvas } from '../effects/ParticleCanvas';
 import { ParticleManager } from '../effects/ParticleManager';
 import { AudioManager } from '../audio/AudioManager';
@@ -30,6 +30,7 @@ import {
   ChevronUp,
   ChevronDown,
   Zap,
+  SkipForward,
 } from 'lucide-react';
 
 interface BattleScreenProps {
@@ -98,6 +99,9 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
   const [earnedXp, setEarnedXp] = useState<number>(0);
 
   const arenaContainerRef = useRef<HTMLDivElement>(null);
+  const catAnchors = useRef<Record<string, HTMLDivElement | null>>({});
+  const strikeToken = useRef(0);
+  const [strike, setStrike] = useState<(StrikeMotion & { attackerId: string; token: number }) | null>(null);
 
   // Auto-manage selected attacker: Must be ALIVE and preferably HAS NOT ACTED YET this round
   useEffect(() => {
@@ -265,6 +269,49 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
     return { x: baseX, y: stepY * (slotIndex + 1) };
   };
 
+  // Distance from the attacker sprite to the marked target, in every viewport.
+  const measureStrikeOffset = (attackerId: string, defenderId: string) => {
+    const from = catAnchors.current[attackerId];
+    const to = catAnchors.current[defenderId];
+    if (!from || !to) return { dx: 0, dy: 0 };
+    const attackerBox = from.getBoundingClientRect();
+    const targetBox = to.getBoundingClientRect();
+    const dx = targetBox.left + targetBox.width / 2 - (attackerBox.left + attackerBox.width / 2);
+    const dy = targetBox.top + targetBox.height / 2 - (attackerBox.top + attackerBox.height / 2);
+    // Stop just short of the target center so the paw lands on the cat.
+    return { dx: dx * 0.78, dy: dy * 0.78 };
+  };
+
+  const launchStrike = (attackerId: string, defenderId: string) => {
+    const offset = measureStrikeOffset(attackerId, defenderId);
+    const token = strikeToken.current + 1;
+    strikeToken.current = token;
+    setStrike({
+      attackerId,
+      token,
+      dx: offset.dx,
+      dy: offset.dy,
+      phase: 'go',
+      showPaw: false,
+    });
+    return token;
+  };
+
+  const flashPaw = (token: number) => {
+    setStrike((current) =>
+      current && current.token === token ? { ...current, showPaw: true } : current
+    );
+  };
+
+  const returnStrike = (token: number) => {
+    setStrike((current) =>
+      current && current.token === token ? { ...current, phase: 'back', showPaw: false } : current
+    );
+    window.setTimeout(() => {
+      setStrike((current) => (current && current.token === token ? null : current));
+    }, 360);
+  };
+
   // 3. EXECUTE ACTION (PLAYER)
   const handlePlayerAction = (action: ActionType) => {
     if (isExecutingAction || phase !== 'PLAYER_TURN') return;
@@ -359,7 +406,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       return;
     }
 
-    // Trigger dash animation
+    // Leave the slot and run to the marked target (basic attack and special, any screen size)
+    const strikeTokenId = launchStrike(attacker.instanceId, defender.instanceId);
     setPlayerCats((prev) =>
       prev.map((c) => (c.instanceId === attacker.instanceId ? { ...c, animState: 'attacking' } : c))
     );
@@ -384,6 +432,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
     );
 
     setTimeout(() => {
+      flashPaw(strikeTokenId);
       // Particles & Devastating Effects
       if (result.isDesperation) {
         AudioManager.playDesperation();
@@ -492,14 +541,16 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       // End match only when EVERY enemy combatant is down (and team is non-empty)
       const anyBotStillAlive = botsAfterEffects.some((c) => c.isAlive && c.currentHp > 0);
       if (botsAfterEffects.length > 0 && !anyBotStillAlive) {
+        returnStrike(strikeTokenId);
         setTimeout(() => {
           handleMatchEnd(true);
         }, 450);
         return;
       }
 
-      // Reset animation states & advance sequence
+      // Run back home, then advance sequence
       setTimeout(() => {
+        returnStrike(strikeTokenId);
         setPlayerCats((prev) =>
           prev.map((c) => (c.animState !== 'fainted' ? { ...c, animState: 'idle' } : c))
         );
@@ -511,8 +562,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         setPlayerCatsActed(nextPlayerActed);
 
         advanceTurnSequence('player', nextPlayerActed, botCatsActed, botsAfterEffects);
-      }, 400);
-    }, 220);
+      }, 460);
+    }, 300);
   };
 
   // Player Heal Action (Consumes 1 of 3 uses)
@@ -580,6 +631,24 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       setPlayerCatsActed(nextPlayerActed);
       advanceTurnSequence('player', nextPlayerActed, botCatsActed, botCats);
     }, 400);
+  };
+
+  // Skip the turn while the last acting cat is locked behind a shield.
+  const passShieldedTurn = () => {
+    if (isExecutingAction || phase !== 'PLAYER_TURN') return;
+    const attacker =
+      playerCats.find((c) => c.instanceId === selectedAttackerId && c.isAlive && c.shieldRounds > 0) ||
+      playerCats.find((c) => c.isAlive && c.shieldRounds > 0 && !playerCatsActed.includes(c.instanceId));
+    if (!attacker || playerCatsActed.includes(attacker.instanceId)) return;
+
+    setIsExecutingAction(true);
+    AudioManager.playClick();
+    addLog(`🛡️ ${attacker.baseStats.name} mantém o escudo e passa a vez.`, 'shield');
+    setTimeout(() => {
+      const nextPlayerActed = [...playerCatsActed, attacker.instanceId];
+      setPlayerCatsActed(nextPlayerActed);
+      advanceTurnSequence('player', nextPlayerActed, botCatsActed, botCats);
+    }, 280);
   };
 
   // 4. BOT TURN EXECUTION (Executes 1 bot cat action, then hands turn back)
@@ -667,6 +736,17 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         return;
       }
 
+      // A shielded bot cannot strike; it holds the barrier and passes, same as the player.
+      if (botAttacker.shieldRounds > 0 && (decision.action === 'ATTACK' || decision.action === 'SPECIAL')) {
+        addLog(`🛡️ [Inimigo] ${botAttacker.baseStats.name} mantém o escudo e passa a vez.`, 'shield');
+        setTimeout(() => {
+          const nextBotActed = [...curBotActed, botAttacker.instanceId];
+          setBotCatsActed(nextBotActed);
+          advanceTurnSequence('bot', curPlayerActed, nextBotActed, botCats);
+        }, 350);
+        return;
+      }
+
       // Offensive Attack / Special from Bot
       const defender =
         playerCats.find((p) => p.instanceId === decision.targetId && p.isAlive && p.currentHp > 0) ||
@@ -676,6 +756,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         return;
       }
 
+      const botStrikeToken = launchStrike(botAttacker.instanceId, defender.instanceId);
       setBotCats((prev) =>
         prev.map((b) => (b.instanceId === botAttacker.instanceId ? { ...b, animState: 'attacking' } : b))
       );
@@ -700,6 +781,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       );
 
       setTimeout(() => {
+        flashPaw(botStrikeToken);
         if (result.isDesperation) {
           AudioManager.playDesperation();
           ParticleManager.createDesperationEffect(
@@ -798,6 +880,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         // End match only when EVERY player combatant is down (and team is non-empty)
         const anyPlayerStillAlive = updatedPlayerCats.some((c) => c.isAlive && c.currentHp > 0);
         if (updatedPlayerCats.length > 0 && !anyPlayerStillAlive) {
+          returnStrike(botStrikeToken);
           setTimeout(() => {
             handleMatchEnd(false);
           }, 450);
@@ -805,6 +888,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         }
 
         setTimeout(() => {
+          returnStrike(botStrikeToken);
           setBotCats((prev) =>
             prev.map((b) => (b.animState !== 'fainted' ? { ...b, animState: 'idle' } : b))
           );
@@ -815,8 +899,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           const nextBotActed = [...curBotActed, botAttacker.instanceId];
           setBotCatsActed(nextBotActed);
           advanceTurnSequence('bot', curPlayerActed, nextBotActed, botCats, updatedPlayerCats);
-        }, 400);
-      }, 220);
+        }, 460);
+      }, 300);
     }, 400);
   };
 
@@ -984,6 +1068,9 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
 
   const isAttackerAvailable = attackerCat && attackerCat.isAlive && !playerCatsActed.includes(attackerCat.instanceId);
   const isPlayerTurnNow = phase === 'PLAYER_TURN' && !isExecutingAction && !!isAttackerAvailable;
+  const pendingPlayerCats = playerCats.filter((c) => c.isAlive && !playerCatsActed.includes(c.instanceId));
+  const canPassTurn =
+    isPlayerTurnNow && pendingPlayerCats.length > 0 && pendingPlayerCats.every((c) => c.shieldRounds > 0);
   const isAttackBlockedByShield = attackerCat ? attackerCat.shieldRounds > 0 : false;
   const isSpecialOnCooldown = attackerCat ? attackerCat.specialCooldown > 0 : true;
   const isDesperationReady = attackerCat
@@ -1052,7 +1139,14 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       <main className="relative z-10 max-w-5xl w-full mx-auto flex-1 flex flex-col justify-center my-0.5">
         <div className="grid grid-cols-2 gap-2 sm:gap-4 md:gap-8 items-center justify-items-center w-full">
           {/* PLAYER TEAM (LEFT COLUMN) - Only living survivors can be chosen to attack! */}
-          <section className="flex flex-col gap-1 sm:gap-2 items-center w-full">
+          <section
+            className="flex flex-col gap-1 sm:gap-2 items-center w-full"
+            style={
+              strike && playerCats.some((c) => c.instanceId === strike.attackerId)
+                ? { position: 'relative', zIndex: 40 }
+                : undefined
+            }
+          >
             <div className="text-[10px] sm:text-xs font-heading font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
               <span>Sua Equipe ({playerCats.filter((c) => c.isAlive).length}/3)</span>
@@ -1075,12 +1169,17 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                         ? 'opacity-70'
                         : 'opacity-95 hover:opacity-100'
                     }`}
+                    style={strike?.attackerId === cat.instanceId ? { position: 'relative', zIndex: 40 } : undefined}
                   >
                     <CatRenderer
                       cat={cat}
                       isSelectedForAction={isSelected}
                       hasActedThisRound={hasActed}
                       flipX={true}
+                      strike={strike?.attackerId === cat.instanceId ? strike : null}
+                      anchorRef={(node) => {
+                        catAnchors.current[cat.instanceId] = node;
+                      }}
                       onSelectAttacker={() => {
                         if (cat.isAlive && !hasActed && phase === 'PLAYER_TURN') {
                           AudioManager.playSelect();
@@ -1095,7 +1194,14 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           </section>
 
           {/* BOT TEAM (RIGHT COLUMN) - Only living survivors can be targeted! */}
-          <section className="flex flex-col gap-1 sm:gap-2 items-center w-full">
+          <section
+            className="flex flex-col gap-1 sm:gap-2 items-center w-full"
+            style={
+              strike && botCats.some((c) => c.instanceId === strike.attackerId)
+                ? { position: 'relative', zIndex: 40 }
+                : undefined
+            }
+          >
             <div className="text-[10px] sm:text-xs font-heading font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
               <span>Equipe Inimiga ({botCats.filter((c) => c.isAlive).length}/3)</span>
@@ -1107,12 +1213,20 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                 const hasActed = botCatsActed.includes(cat.instanceId);
 
                 return (
-                  <div key={cat.instanceId} className="transition-all">
+                  <div
+                    key={cat.instanceId}
+                    className="transition-all"
+                    style={strike?.attackerId === cat.instanceId ? { position: 'relative', zIndex: 40 } : undefined}
+                  >
                     <CatRenderer
                       cat={cat}
                       isTargeted={isTargeted}
                       canBeTargeted={cat.isAlive}
                       hasActedThisRound={hasActed}
+                      strike={strike?.attackerId === cat.instanceId ? strike : null}
+                      anchorRef={(node) => {
+                        catAnchors.current[cat.instanceId] = node;
+                      }}
                       onSelectTarget={() => {
                         if (cat.isAlive) {
                           AudioManager.playSelect();
@@ -1190,10 +1304,12 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
           {/* 1. ATAQUE */}
           <button
-            disabled={!isPlayerTurnNow || isAttackBlockedByShield}
-            onClick={() => handlePlayerAction('ATTACK')}
+            disabled={!isPlayerTurnNow || (isAttackBlockedByShield && !canPassTurn)}
+            onClick={() => (canPassTurn ? passShieldedTurn() : handlePlayerAction('ATTACK'))}
             className={`py-2 sm:py-2.5 px-1 rounded-xl font-heading font-bold text-xs sm:text-sm tracking-wider uppercase transition-all flex flex-col items-center justify-center gap-0.5 border relative ${
-              isPlayerTurnNow && !isAttackBlockedByShield
+              canPassTurn
+                ? 'bg-gradient-to-b from-cyan-600 to-sky-700 hover:from-cyan-500 hover:to-sky-600 text-white border-cyan-300 shadow-[0_0_18px_rgba(6,182,212,0.55)] cursor-pointer active:scale-95'
+                : isPlayerTurnNow && !isAttackBlockedByShield
                 ? isDesperationReady
                   ? 'bg-gradient-to-b from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white border-rose-300 shadow-[0_0_25px_rgba(244,63,94,0.9)] cursor-pointer active:scale-95 animate-pulse'
                   : 'bg-gradient-to-b from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white border-rose-400 shadow-[0_0_20px_rgba(225,29,72,0.6)] cursor-pointer active:scale-95 animate-pulse'
@@ -1206,10 +1322,10 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                 2X DANO
               </span>
             )}
-            <Swords className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>ATAQUE</span>
+            {canPassTurn ? <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" /> : <Swords className="w-4 h-4 sm:w-5 sm:h-5" />}
+            <span>{canPassTurn ? 'PASSAR' : 'ATAQUE'}</span>
             <span className="text-[8px] sm:text-[9px] font-mono opacity-80">
-              {isAttackBlockedByShield ? 'Bloqueado' : isDesperationReady ? '2x Fulminante' : 'Básico'}
+              {canPassTurn ? 'A vez' : isAttackBlockedByShield ? 'Bloqueado' : isDesperationReady ? '2x Fulminante' : 'Básico'}
             </span>
           </button>
 

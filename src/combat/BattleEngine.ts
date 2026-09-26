@@ -138,10 +138,11 @@ export class BattleEngine {
       notes.push('🪨 Roleta Rocha (+20% DEF Terra)');
     }
 
-    // Base damage formula
+    // Base damage formula. Global +15% so matches don't stall against high DEF (Earth).
+    const GLOBAL_DAMAGE_MULT = 1.15;
     const rawAtkTotal = effectiveAtk * elementMult * arenaMod * synergyMod * sectorMod * skillMod;
-    let baseDmg = rawAtkTotal - (effectiveDef * 0.4);
-    baseDmg = Math.max(25, baseDmg); // Minimum scratch damage
+    let baseDmg = (rawAtkTotal - effectiveDef * 0.4) * GLOBAL_DAMAGE_MULT;
+    baseDmg = Math.max(29, baseDmg); // Minimum scratch damage (25 * 1.15)
 
     // Check Dodge
     let effectiveDodge = defender.dodge;
