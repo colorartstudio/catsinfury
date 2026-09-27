@@ -47,6 +47,7 @@ interface BattleScreenProps {
 
 const MAX_HEALS_PER_MATCH = 3;
 const MAX_SHIELDS_PER_MATCH = 1;
+const SPECIAL_RECHARGE_ROUNDS = 2;
 
 export const BattleScreen: React.FC<BattleScreenProps> = ({
   arena,
@@ -103,7 +104,14 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
   const strikeToken = useRef(0);
   const clawToken = useRef(0);
   const [strike, setStrike] = useState<(StrikeMotion & { attackerId: string; token: number }) | null>(null);
-  const [giantClaw, setGiantClaw] = useState<{ targetId: string; multiplier: 2 | 3; token: number } | null>(null);
+  const [giantClaw, setGiantClaw] = useState<{
+    targetId: string;
+    multiplier: 2 | 3;
+    token: number;
+    cinematic?: boolean;
+    basic?: boolean;
+    element: ElementType;
+  } | null>(null);
 
   // Auto-manage selected attacker: Must be ALIVE and preferably HAS NOT ACTED YET this round
   useEffect(() => {
@@ -284,7 +292,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
     return { dx: dx * 0.78, dy: dy * 0.78 };
   };
 
-  const launchStrike = (attackerId: string, defenderId: string) => {
+  const launchStrike = (attackerId: string, defenderId: string, cinematic = false) => {
     const offset = measureStrikeOffset(attackerId, defenderId);
     const token = strikeToken.current + 1;
     strikeToken.current = token;
@@ -295,6 +303,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       dy: offset.dy,
       phase: 'go',
       showPaw: false,
+      cinematic,
     });
     return token;
   };
@@ -305,23 +314,34 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
     );
   };
 
-  const returnStrike = (token: number) => {
+  const returnStrike = (token: number, cinematic = false) => {
     setStrike((current) =>
       current && current.token === token ? { ...current, phase: 'back', showPaw: false } : current
     );
     window.setTimeout(() => {
       setStrike((current) => (current && current.token === token ? null : current));
-    }, 360);
+    }, cinematic ? 1300 : 360);
   };
 
-  const triggerGiantClaw = (targetId: string, catId: string) => {
+  const triggerGiantClaw = (targetId: string, catId: string, cinematic = false) => {
     const token = clawToken.current + 1;
     clawToken.current = token;
     const multiplier: 2 | 3 = catId === 'wind' ? 3 : 2;
-    setGiantClaw({ targetId, multiplier, token });
+    const element: ElementType =
+      catId === 'water' ? 'ÁGUA' : catId === 'wind' ? 'VENTO' : catId === 'earth' ? 'TERRA' : 'FOGO';
+    setGiantClaw({ targetId, multiplier, token, cinematic, element });
     window.setTimeout(() => {
       setGiantClaw((current) => (current && current.token === token ? null : current));
-    }, 900);
+    }, cinematic ? 5600 : 900);
+  };
+
+  const triggerBasicScratch = (targetId: string, element: ElementType) => {
+    const token = clawToken.current + 1;
+    clawToken.current = token;
+    setGiantClaw({ targetId, multiplier: 2, token, cinematic: false, basic: true, element });
+    window.setTimeout(() => {
+      setGiantClaw((current) => (current && current.token === token ? null : current));
+    }, 2400);
   };
 
   // 3. EXECUTE ACTION (PLAYER)
@@ -424,12 +444,6 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       return;
     }
 
-    // Leave the slot and run to the marked target (basic attack and special, any screen size)
-    const strikeTokenId = launchStrike(attacker.instanceId, defender.instanceId);
-    setPlayerCats((prev) =>
-      prev.map((c) => (c.instanceId === attacker.instanceId ? { ...c, animState: 'attacking' } : c))
-    );
-
     if (action === 'SPECIAL') {
       AudioManager.playSpecial(attacker.baseStats.element);
     } else {
@@ -449,11 +463,22 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       [...playerCats, ...botCats]
     );
 
+    const cinematic = Boolean(result.isDesperation);
+    const strikeTokenId = launchStrike(attacker.instanceId, defender.instanceId, cinematic);
+    const impactDelay = cinematic ? 1200 : 300;
+    const settleDelay = cinematic ? 1600 : 460;
+    setPlayerCats((prev) =>
+      prev.map((c) => (c.instanceId === attacker.instanceId ? { ...c, animState: 'attacking' } : c))
+    );
+
     setTimeout(() => {
       flashPaw(strikeTokenId);
+      if (!cinematic && action === 'ATTACK') {
+        triggerBasicScratch(defender.instanceId, attacker.baseStats.element);
+      }
       // Particles & Devastating Effects
       if (result.isDesperation) {
-        triggerGiantClaw(defender.instanceId, attacker.baseStats.id);
+        triggerGiantClaw(defender.instanceId, attacker.baseStats.id, cinematic);
         AudioManager.playDesperation(attacker.baseStats.id === 'wind' ? 3 : 2);
         ParticleManager.createDesperationEffect(
           attacker.baseStats.id,
@@ -467,6 +492,15 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           `⚡ ${attacker.baseStats.desperationName.toUpperCase()}! ${attacker.baseStats.id === 'wind' ? '3X' : '2X'} DANO (-${result.finalDamage})`,
           'desperation'
         );
+        if (result.isDodged) {
+          AudioManager.playDodge();
+          ParticleManager.addFloatingText(
+            defenderCoords.x,
+            defenderCoords.y + 16,
+            result.finalDamage <= 0 ? 'ESQUIVOU!' : `ESQUIVA 50% -${result.finalDamage}`,
+            'dodge'
+          );
+        }
       } else {
         switch (attacker.baseStats.element) {
           case 'FOGO':
@@ -483,9 +517,12 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
             break;
         }
 
-        if (result.isDodged) {
+        if (result.isDodged && result.finalDamage <= 0) {
           AudioManager.playDodge();
           ParticleManager.addFloatingText(defenderCoords.x, defenderCoords.y, 'ESQUIVOU!', 'dodge');
+        } else if (result.isDodged) {
+          AudioManager.playDodge();
+          ParticleManager.addFloatingText(defenderCoords.x, defenderCoords.y, `ESQUIVA 50% -${result.finalDamage}`, 'dodge');
         } else if (result.isShieldBlocked) {
           AudioManager.playShieldAbsorb();
           ParticleManager.createShieldEffect(defenderCoords.x, defenderCoords.y);
@@ -524,7 +561,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
 
       // Burn on fire attacks (applied onto the same snapshot)
       let botsAfterEffects = updatedBotCats;
-      if (attacker.baseStats.id === 'fire') {
+      if (attacker.baseStats.id === 'fire' && !(result.isDodged && result.finalDamage <= 0)) {
         const burnPower = action === 'SPECIAL' ? 0.10 : 0.05;
         botsAfterEffects = updatedBotCats.map((c) => {
           if (c.instanceId !== defender!.instanceId || !c.isAlive) return c;
@@ -547,6 +584,11 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           result.isCrit ? 'crit' : 'damage',
           attacker.baseStats.element
         );
+      }
+      if (result.isDodged && result.finalDamage <= 0) {
+        addLog(`🌪️ ${defender.baseStats.name} esquivou completamente! Nenhum dano.`, 'dodge');
+      } else if (result.isDodged) {
+        addLog(`🌪️ ${defender.baseStats.name} ativou Esquiva Eólica e recebeu só metade: ${result.finalDamage} de dano.`, 'dodge');
       }
 
       // Water special strikes AND restores its own HP. The 20% tide decays each use and does not spend the 3 shared heals.
@@ -572,11 +614,12 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           let newCd = c.specialCooldown;
           let isTaunting = c.isTaunting;
           if (action === 'SPECIAL') {
-            newCd = c.baseStats.specialCooldownMax;
+            newCd = SPECIAL_RECHARGE_ROUNDS;
             if (c.baseStats.id === 'earth') {
               isTaunting = true;
               addLog(`🪨 ${c.baseStats.name} ativou Provocação!`, 'taunt');
             }
+            addLog(`⏳ Especial de ${c.baseStats.name} entrou em recarga: ${SPECIAL_RECHARGE_ROUNDS} rodadas até ativar de novo.`, 'system');
           }
           const hasTriggeredDesperation = c.hasTriggeredDesperation || Boolean(result.isDesperation);
           return {
@@ -584,6 +627,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
             currentHp: waterTide > 0 ? Math.min(c.maxHp, c.currentHp + waterTide) : c.currentHp,
             waterSpecialUses: waterTide > 0 ? c.waterSpecialUses + 1 : c.waterSpecialUses,
             specialCooldown: newCd,
+            holdSpecialCooldown: action === 'SPECIAL' ? true : c.holdSpecialCooldown,
             isTaunting,
             hasTriggeredDesperation,
           };
@@ -593,16 +637,16 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
       // End match only when EVERY enemy combatant is down (and team is non-empty)
       const anyBotStillAlive = botsAfterEffects.some((c) => c.isAlive && c.currentHp > 0);
       if (botsAfterEffects.length > 0 && !anyBotStillAlive) {
-        returnStrike(strikeTokenId);
+        returnStrike(strikeTokenId, cinematic);
         setTimeout(() => {
           handleMatchEnd(true);
-        }, 450);
+        }, cinematic ? 1400 : 450);
         return;
       }
 
       // Run back home, then advance sequence
       setTimeout(() => {
-        returnStrike(strikeTokenId);
+        returnStrike(strikeTokenId, cinematic);
         setPlayerCats((prev) =>
           prev.map((c) => (c.animState !== 'fainted' ? { ...c, animState: 'idle' } : c))
         );
@@ -614,8 +658,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         setPlayerCatsActed(nextPlayerActed);
 
         advanceTurnSequence('player', nextPlayerActed, botCatsActed, botsAfterEffects);
-      }, 460);
-    }, 300);
+      }, settleDelay);
+    }, impactDelay);
   };
 
   // Player Heal Action (Consumes 1 of 3 uses)
@@ -818,7 +862,20 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
         return;
       }
 
-      const botStrikeToken = launchStrike(botAttacker.instanceId, defender.instanceId);
+      const botResultPreview = BattleEngine.calculateDamage(
+        botAttacker,
+        defender,
+        decision.action,
+        arena,
+        botSynergy,
+        playerSynergy,
+        activeSector,
+        [...playerCats, ...botCats]
+      );
+      const botCinematic = Boolean(botResultPreview.isDesperation);
+      const botStrikeToken = launchStrike(botAttacker.instanceId, defender.instanceId, botCinematic);
+      const botImpactDelay = botCinematic ? 1200 : 300;
+      const botSettleDelay = botCinematic ? 1600 : 460;
       setBotCats((prev) =>
         prev.map((b) => (b.instanceId === botAttacker.instanceId ? { ...b, animState: 'attacking' } : b))
       );
@@ -831,21 +888,15 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
 
       const defenderCoords = getCatCoords('player', defender.slotIndex);
 
-      const result = BattleEngine.calculateDamage(
-        botAttacker,
-        defender,
-        decision.action,
-        arena,
-        botSynergy,
-        playerSynergy,
-        activeSector,
-        [...playerCats, ...botCats]
-      );
+      const result = botResultPreview;
 
       setTimeout(() => {
         flashPaw(botStrikeToken);
+        if (!botCinematic && decision.action === 'ATTACK') {
+          triggerBasicScratch(defender.instanceId, botAttacker.baseStats.element);
+        }
         if (result.isDesperation) {
-          triggerGiantClaw(defender.instanceId, botAttacker.baseStats.id);
+          triggerGiantClaw(defender.instanceId, botAttacker.baseStats.id, botCinematic);
           AudioManager.playDesperation(botAttacker.baseStats.id === 'wind' ? 3 : 2);
           ParticleManager.createDesperationEffect(
             botAttacker.baseStats.id,
@@ -859,6 +910,15 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
             `⚡ ${botAttacker.baseStats.desperationName.toUpperCase()}! ${botAttacker.baseStats.id === 'wind' ? '3X' : '2X'} DANO (-${result.finalDamage})`,
             'desperation'
           );
+          if (result.isDodged) {
+            AudioManager.playDodge();
+            ParticleManager.addFloatingText(
+              defenderCoords.x,
+              defenderCoords.y + 16,
+              result.finalDamage <= 0 ? 'ESQUIVOU!' : `ESQUIVA 50% -${result.finalDamage}`,
+              'dodge'
+            );
+          }
         } else {
           switch (botAttacker.baseStats.element) {
             case 'FOGO':
@@ -875,9 +935,12 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
               break;
           }
 
-          if (result.isDodged) {
+          if (result.isDodged && result.finalDamage <= 0) {
             AudioManager.playDodge();
             ParticleManager.addFloatingText(defenderCoords.x, defenderCoords.y, 'ESQUIVOU!', 'dodge');
+          } else if (result.isDodged) {
+            AudioManager.playDodge();
+            ParticleManager.addFloatingText(defenderCoords.x, defenderCoords.y, `ESQUIVA 50% -${result.finalDamage}`, 'dodge');
           } else if (result.isShieldBlocked) {
             AudioManager.playShieldAbsorb();
             ParticleManager.createShieldEffect(defenderCoords.x, defenderCoords.y);
@@ -915,7 +978,18 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
             animState: isFainted ? 'fainted' : result.isDodged ? 'dodging' : 'hurt',
           };
         });
-        setPlayerCats(updatedPlayerCats);
+        const playersAfterBurn =
+          botAttacker.baseStats.id === 'fire' && !(result.isDodged && result.finalDamage <= 0)
+            ? updatedPlayerCats.map((c) =>
+                c.instanceId === defender.instanceId && c.isAlive
+                  ? { ...c, burnRounds: 2, burnPower: decision.action === 'SPECIAL' ? 0.1 : 0.05 }
+                  : c
+              )
+            : updatedPlayerCats;
+        if (botAttacker.baseStats.id === 'fire' && !(result.isDodged && result.finalDamage <= 0)) {
+          addLog(`🔥 ${defender.baseStats.name} está em chamas (Burn 2R)!`, 'burn');
+        }
+        setPlayerCats(playersAfterBurn);
 
         if (result.isDesperation) {
           addLog(
@@ -929,6 +1003,11 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
             result.isCrit ? 'crit' : 'damage',
             botAttacker.baseStats.element
           );
+        }
+        if (result.isDodged && result.finalDamage <= 0) {
+          addLog(`🌪️ ${defender.baseStats.name} esquivou completamente! Nenhum dano.`, 'dodge');
+        } else if (result.isDodged) {
+          addLog(`🌪️ ${defender.baseStats.name} ativou Esquiva Eólica e recebeu só metade: ${result.finalDamage} de dano.`, 'dodge');
         }
 
         // Water special strikes and restores its own HP. Desperation still marks on any finisher.
@@ -947,7 +1026,12 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
           );
         }
 
-        if (result.isDesperation || botWaterTide > 0 || decision.action === 'SPECIAL') {
+        if (decision.action === 'SPECIAL' && botAttacker.baseStats.id === 'earth') {
+          addLog(`🪨 [Inimigo] ${botAttacker.baseStats.name} ativou Provocação!`, 'taunt');
+        }
+        if (decision.action === 'SPECIAL') {
+          addLog(`⏳ Especial de [Inimigo] ${botAttacker.baseStats.name} entrou em recarga: ${SPECIAL_RECHARGE_ROUNDS} rodadas.`, 'system');
+        }
           setBotCats((prev) =>
             prev.map((b) => {
               if (b.instanceId !== botAttacker.instanceId) return b;
@@ -955,26 +1039,26 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                 ...b,
                 currentHp: botWaterTide > 0 ? Math.min(b.maxHp, b.currentHp + botWaterTide) : b.currentHp,
                 waterSpecialUses: botWaterTide > 0 ? b.waterSpecialUses + 1 : b.waterSpecialUses,
-                specialCooldown:
-                  decision.action === 'SPECIAL' ? b.baseStats.specialCooldownMax : b.specialCooldown,
+                specialCooldown: decision.action === 'SPECIAL' ? SPECIAL_RECHARGE_ROUNDS : b.specialCooldown,
+                holdSpecialCooldown: decision.action === 'SPECIAL' ? true : b.holdSpecialCooldown,
+                isTaunting: decision.action === 'SPECIAL' && b.baseStats.id === 'earth' ? true : b.isTaunting,
                 hasTriggeredDesperation: b.hasTriggeredDesperation || Boolean(result.isDesperation),
               };
             })
           );
-        }
 
         // End match only when EVERY player combatant is down (and team is non-empty)
         const anyPlayerStillAlive = updatedPlayerCats.some((c) => c.isAlive && c.currentHp > 0);
         if (updatedPlayerCats.length > 0 && !anyPlayerStillAlive) {
-          returnStrike(botStrikeToken);
+          returnStrike(botStrikeToken, botCinematic);
           setTimeout(() => {
             handleMatchEnd(false);
-          }, 450);
+          }, botCinematic ? 1400 : 450);
           return;
         }
 
         setTimeout(() => {
-          returnStrike(botStrikeToken);
+          returnStrike(botStrikeToken, botCinematic);
           setBotCats((prev) =>
             prev.map((b) => (b.animState !== 'fainted' ? { ...b, animState: 'idle' } : b))
           );
@@ -984,9 +1068,9 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
 
           const nextBotActed = [...curBotActed, botAttacker.instanceId];
           setBotCatsActed(nextBotActed);
-          advanceTurnSequence('bot', curPlayerActed, nextBotActed, botCats, updatedPlayerCats);
-        }, 460);
-      }, 300);
+          advanceTurnSequence('bot', curPlayerActed, nextBotActed, botCats, playersAfterBurn);
+        }, botSettleDelay);
+      }, botImpactDelay);
     }, 400);
   };
 
@@ -1092,7 +1176,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
     setPlayerCats((prev) =>
       prev.map((c) => ({
         ...c,
-        specialCooldown: Math.max(0, c.specialCooldown - 1),
+        specialCooldown: c.holdSpecialCooldown ? c.specialCooldown : Math.max(0, c.specialCooldown - 1),
+        holdSpecialCooldown: false,
         shieldRounds: Math.max(0, c.shieldRounds - 1),
         isTaunting: false,
       }))
@@ -1101,7 +1186,8 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
     setBotCats((prev) =>
       prev.map((c) => ({
         ...c,
-        specialCooldown: Math.max(0, c.specialCooldown - 1),
+        specialCooldown: c.holdSpecialCooldown ? c.specialCooldown : Math.max(0, c.specialCooldown - 1),
+        holdSpecialCooldown: false,
         shieldRounds: Math.max(0, c.shieldRounds - 1),
         isTaunting: false,
       }))
@@ -1273,7 +1359,16 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                       hasActedThisRound={hasActed}
                       flipX={true}
                       strike={strike?.attackerId === cat.instanceId ? strike : null}
-                      giantClaw={giantClaw?.targetId === cat.instanceId ? giantClaw.multiplier : null}
+                      giantClaw={
+                        giantClaw?.targetId === cat.instanceId
+                          ? {
+                              multiplier: giantClaw.multiplier,
+                              cinematic: giantClaw.cinematic,
+                              basic: giantClaw.basic,
+                              element: giantClaw.element,
+                            }
+                          : null
+                      }
                       anchorRef={(node) => {
                         catAnchors.current[cat.instanceId] = node;
                       }}
@@ -1326,7 +1421,16 @@ export const BattleScreen: React.FC<BattleScreenProps> = ({
                       canBeTargeted={cat.isAlive}
                       hasActedThisRound={hasActed}
                       strike={strike?.attackerId === cat.instanceId ? strike : null}
-                      giantClaw={giantClaw?.targetId === cat.instanceId ? giantClaw.multiplier : null}
+                      giantClaw={
+                        giantClaw?.targetId === cat.instanceId
+                          ? {
+                              multiplier: giantClaw.multiplier,
+                              cinematic: giantClaw.cinematic,
+                              basic: giantClaw.basic,
+                              element: giantClaw.element,
+                            }
+                          : null
+                      }
                       anchorRef={(node) => {
                         catAnchors.current[cat.instanceId] = node;
                       }}

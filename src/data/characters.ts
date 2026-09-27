@@ -74,7 +74,7 @@ export const CAT_CHARACTERS: Record<string, BaseCatStats> = {
     baseDodge: 5,
     baseCrit: 10,
     speed: 10,
-    specialCooldownMax: 3,
+    specialCooldownMax: 2,
     avatarColor: '#84cc16',
     accentColor: '#ca8a04',
     description: 'Forte, protetor e imponente. Pelagem terrosa com cauda de rochas e runas douradas nas patas.',

@@ -40,6 +40,7 @@ export interface CatCombatant {
   crit: number;
   speed: number;
   specialCooldown: number;
+  holdSpecialCooldown: boolean; // Skip the first end-of-round tick so the 2-round recharge is real
   shieldRounds: number; // 0 = no shield
   isTaunting: boolean;  // Earth cat special
   burnRounds: number;   // Fire cat burn

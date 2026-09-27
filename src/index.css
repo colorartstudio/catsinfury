@@ -172,6 +172,75 @@
   transform-origin: 30% 70%;
 }
 
+.animate-giant-paw-slow {
+  animation-duration: 3.6s;
+}
+
+.animate-claw-burst-slow {
+  animation-duration: 3.6s;
+}
+
+.wolverine-slash {
+  fill: none;
+  stroke: #fff7ed;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 240;
+  filter: drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 10px #fb7185);
+  animation: wolverine-rip 4.4s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+.wolverine-slash-b {
+  stroke: #fecaca;
+  animation-delay: 0.45s;
+}
+
+.wolverine-slash-c {
+  stroke: #fda4af;
+  animation-delay: 0.9s;
+}
+
+.cat-paw-swat {
+  transform-box: fill-box;
+  transform-origin: 50% 8%;
+  animation: paw-swat 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes paw-swat {
+  0% { transform: rotate(0deg) translate(0, 0); }
+  40% { transform: rotate(-42deg) translate(8px, -6px); }
+  62% { transform: rotate(16deg) translate(14px, 4px); }
+  100% { transform: rotate(0deg) translate(0, 0); }
+}
+
+.basic-slash {
+  fill: none;
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  stroke-dasharray: 240;
+  filter: drop-shadow(0 0 5px currentColor);
+  animation: basic-rip 1.9s cubic-bezier(0.18, 0.7, 0.2, 1) forwards;
+}
+
+.basic-slash-b { animation-delay: 0.16s; }
+.basic-slash-c { animation-delay: 0.32s; }
+
+@keyframes basic-rip {
+  0% { stroke-dashoffset: 240; opacity: 0; }
+  8% { opacity: 1; }
+  46% { stroke-dashoffset: 0; opacity: 1; }
+  74% { stroke-dashoffset: 0; opacity: 0.95; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes wolverine-rip {
+  0% { stroke-dashoffset: 240; opacity: 0; }
+  6% { opacity: 1; }
+  48% { stroke-dashoffset: 0; opacity: 1; }
+  78% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
 .animate-claw-burst {
   animation: claw-burst 0.85s ease-out forwards;
 }

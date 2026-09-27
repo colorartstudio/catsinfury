@@ -7,6 +7,7 @@ export interface StrikeMotion {
   dy: number;
   phase: 'go' | 'back';
   showPaw: boolean;
+  cinematic?: boolean;
 }
 
 interface CatRendererProps {
@@ -19,7 +20,7 @@ interface CatRendererProps {
   flipX?: boolean; // True for player facing right, false for bot facing left
   hasActedThisRound?: boolean;
   strike?: StrikeMotion | null;
-  giantClaw?: 2 | 3 | null;
+  giantClaw?: { multiplier: 2 | 3; cinematic?: boolean; basic?: boolean; element: ElementType } | null;
   anchorRef?: (node: HTMLDivElement | null) => void;
   advantageTag?: {
     text: string;
@@ -205,7 +206,9 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
                     strike.phase === 'go'
                       ? `translate(${strike.dx}px, ${strike.dy}px) scale(1.14) rotate(${flipX ? -7 : 7}deg)`
                       : 'translate(0px, 0px) scale(1) rotate(0deg)',
-                  transition: 'transform 0.32s cubic-bezier(0.16, 0.82, 0.24, 1)',
+                  transition: strike.cinematic
+                    ? 'transform 1.25s cubic-bezier(0.22, 0.45, 0.28, 1)'
+                    : 'transform 0.32s cubic-bezier(0.16, 0.82, 0.24, 1)',
                   zIndex: 40,
                   filter: 'drop-shadow(0 14px 6px rgba(0,0,0,0.45))',
                 }
@@ -217,9 +220,21 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
               flipX ? '' : 'scale-x-[-1]'
             } ${strike ? '' : motionClasses}`}
           >
-            <CatArtRenderer catId={id} element={element} face={catFace} />
+            <CatArtRenderer
+              catId={id}
+              element={element}
+              face={catFace}
+              swiping={Boolean(strike?.showPaw && !strike.cinematic)}
+            />
             {strike?.showPaw && !giantClaw && <PawSlap />}
-            {giantClaw && <GiantClaw multiplier={giantClaw} element={element} />}
+            {giantClaw && (
+              <GiantClaw
+                multiplier={giantClaw.multiplier}
+                element={giantClaw.element}
+                cinematic={Boolean(giantClaw.cinematic)}
+                basic={Boolean(giantClaw.basic)}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -236,7 +251,7 @@ export const CatRenderer: React.FC<CatRendererProps> = ({
         </div>
 
         {/* HP Bar */}
-        <div className="w-full h-1.5 sm:h-2 bg-slate-900/90 rounded-full overflow-hidden p-0.5 border border-slate-700/80 shadow-inner">
+        <div className="w-full h-2.5 sm:h-3 bg-slate-900/90 rounded-full overflow-hidden border border-slate-700/80 shadow-inner">
           <div
             className={`h-full rounded-full transition-all duration-300 ${
               !cat.isAlive
@@ -293,12 +308,42 @@ const PAW_TONES: Record<ElementType, { fur: string; furDark: string; stripe: str
   TERRA: { fur: '#ca8a04', furDark: '#78350f', stripe: '#451a03', pad: '#fef3c7', claw: '#f8fafc', burst: 'rgba(202,138,4,0.4)', lion: true },
 };
 
-const GiantClaw = ({ multiplier, element }: { multiplier: 2 | 3; element: ElementType }) => {
+const GiantClaw = ({
+  multiplier,
+  element,
+  cinematic = false,
+  basic = false,
+}: {
+  multiplier: 2 | 3;
+  element: ElementType;
+  cinematic?: boolean;
+  basic?: boolean;
+}) => {
   const tone = PAW_TONES[element] ?? PAW_TONES.FOGO;
+  if (basic) {
+    return (
+      <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 h-[220%] w-[220%] -translate-x-1/2 -translate-y-1/2" aria-hidden>
+        <svg viewBox="0 0 64 64" className="absolute right-[8%] top-[8%] h-[42%] w-[42%] animate-paw-slap">
+          <ellipse cx="24" cy="40" rx="16" ry="13" fill={tone.pad} stroke={tone.furDark} strokeWidth="2.5" />
+          <ellipse cx="14" cy="22" rx="6" ry="8" fill={tone.pad} stroke={tone.furDark} strokeWidth="2" transform="rotate(-18 14 22)" />
+          <ellipse cx="26" cy="16" rx="5.5" ry="8" fill={tone.pad} stroke={tone.furDark} strokeWidth="2" />
+          <ellipse cx="37" cy="20" rx="5.5" ry="7.5" fill={tone.pad} stroke={tone.furDark} strokeWidth="2" transform="rotate(16 37 20)" />
+          <path d="M 10 14 L 16 22" stroke={tone.claw} strokeWidth="2" strokeLinecap="round" />
+          <path d="M 24 8 L 26 18" stroke={tone.claw} strokeWidth="2" strokeLinecap="round" />
+          <path d="M 36 10 L 34 20" stroke={tone.claw} strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <svg viewBox="0 0 200 200" className="absolute inset-0 h-full w-full">
+          <path className="basic-slash" stroke={tone.claw} d="M 52 24 C 96 74 124 122 150 186" />
+          <path className="basic-slash basic-slash-b" stroke={tone.fur} d="M 74 12 C 114 68 140 118 168 182" />
+          <path className="basic-slash basic-slash-c" stroke={tone.pad} d="M 96 8 C 130 66 154 118 186 176" />
+        </svg>
+      </div>
+    );
+  }
   return (
     <div className="absolute left-1/2 top-1/2 z-50 w-[260%] h-[260%] -translate-x-1/2 -translate-y-1/2 pointer-events-none" aria-hidden>
-      <div className="absolute inset-0 rounded-full blur-md animate-claw-burst" style={{ background: tone.burst }} />
-      <svg viewBox="0 0 200 200" className="w-full h-full animate-giant-paw drop-shadow-[0_16px_18px_rgba(0,0,0,0.6)]">
+      <div className={`absolute inset-0 rounded-full blur-md animate-claw-burst ${cinematic ? 'animate-claw-burst-slow' : ''}`} style={{ background: tone.burst }} />
+      <svg viewBox="0 0 200 200" className={`w-full h-full animate-giant-paw drop-shadow-[0_16px_18px_rgba(0,0,0,0.6)] ${cinematic ? 'animate-giant-paw-slow' : ''}`}>
         <path d="M 28 118 C 18 78 48 48 96 44 C 150 40 188 78 176 124 C 166 160 120 176 78 168 C 42 160 36 142 28 118 Z" fill={tone.fur} />
         {!tone.lion && (
           <>
@@ -317,10 +362,21 @@ const GiantClaw = ({ multiplier, element }: { multiplier: 2 | 3; element: Elemen
         <path d="M 72 48 C 68 26 78 16 86 26 C 80 40 78 54 80 64" fill={tone.claw} stroke="#0f172a" strokeWidth="1.5" />
         <path d="M 112 50 C 114 28 126 18 132 30 C 124 44 118 56 116 66" fill={tone.claw} stroke="#0f172a" strokeWidth="1.5" />
         <path d="M 146 66 C 156 46 170 42 168 56 C 160 68 150 76 144 84" fill={tone.claw} stroke="#0f172a" strokeWidth="1.5" />
-        <path className="claw-mark" d="M 118 18 C 132 48 140 86 128 150" />
-        <path className="claw-mark claw-mark-delay" d="M 138 12 C 156 46 164 90 148 154" />
-        {multiplier === 3 && <path className="claw-mark claw-mark-late" d="M 156 22 C 176 58 182 98 162 158" />}
+        {!cinematic && (
+          <>
+            <path className="claw-mark" d="M 118 18 C 132 48 140 86 128 150" />
+            <path className="claw-mark claw-mark-delay" d="M 138 12 C 156 46 164 90 148 154" />
+            {multiplier === 3 && <path className="claw-mark claw-mark-late" d="M 156 22 C 176 58 182 98 162 158" />}
+          </>
+        )}
       </svg>
+      {cinematic && (
+        <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full">
+          <path className="wolverine-slash" d="M 48 18 C 90 70 120 120 154 188" />
+          <path className="wolverine-slash wolverine-slash-b" d="M 72 8 C 112 66 138 118 170 184" />
+          <path className="wolverine-slash wolverine-slash-c" d="M 96 4 C 132 64 156 116 188 178" />
+        </svg>
+      )}
     </div>
   );
 };
@@ -364,23 +420,27 @@ const CatMouth = ({ face, tone }: { face: CatFace; tone: string }) => {
 };
 
 // Vector SVG renderer that matches the user's reference image for each cat
-const CatArtRenderer: React.FC<{ catId: string; element: ElementType; face: CatFace }> = ({ catId, face }) => {
+const CatArtRenderer: React.FC<{ catId: string; element: ElementType; face: CatFace; swiping?: boolean }> = ({
+  catId,
+  face,
+  swiping = false,
+}) => {
   switch (catId) {
     case 'fire':
-      return <FireCatArt face={face} />;
+      return <FireCatArt face={face} swiping={swiping} />;
     case 'water':
-      return <WaterCatArt face={face} />;
+      return <WaterCatArt face={face} swiping={swiping} />;
     case 'wind':
-      return <WindCatArt face={face} />;
+      return <WindCatArt face={face} swiping={swiping} />;
     case 'earth':
-      return <EarthCatArt face={face} />;
+      return <EarthCatArt face={face} swiping={swiping} />;
     default:
-      return <FireCatArt face={face} />;
+      return <FireCatArt face={face} swiping={swiping} />;
   }
 };
 
 // FIRE CAT (Gato de Fogo): Orange/red muscular coat, blazing tail, flame paws, glowing amber eyes
-const FireCatArt = ({ face }: { face: CatFace }) => (
+const FireCatArt = ({ face, swiping = false }: { face: CatFace; swiping?: boolean }) => (
   <svg viewBox="0 0 240 180" className="cat-expr w-full h-full drop-shadow-md">
     <defs>
       <linearGradient id="fireBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -433,14 +493,13 @@ const FireCatArt = ({ face }: { face: CatFace }) => (
 
     {/* Foreleg Left */}
     <path d="M 140 105 Q 142 130 140 150 L 152 150 Q 155 130 155 110 Z" fill="#991b1b" />
-    {/* Foreleg Right */}
-    <path d="M 160 105 Q 165 128 168 150 L 180 150 Q 178 128 172 105 Z" fill="#ea580c" />
-
-    {/* Flame Paws with golden flames */}
+    <g className={swiping ? 'cat-paw-swat' : undefined}>
+      <path d="M 160 105 Q 165 128 168 150 L 180 150 Q 178 128 172 105 Z" fill="#ea580c" />
+      <path d="M 166 148 Q 174 142 182 148" stroke="#facc15" strokeWidth="3" fill="none" />
+    </g>
     <path d="M 64 148 Q 72 142 80 148" stroke="#facc15" strokeWidth="3" fill="none" />
     <path d="M 88 146 Q 96 140 104 146" stroke="#facc15" strokeWidth="3" fill="none" />
     <path d="M 138 148 Q 146 142 154 148" stroke="#facc15" strokeWidth="3" fill="none" />
-    <path d="M 166 148 Q 174 142 182 148" stroke="#facc15" strokeWidth="3" fill="none" />
 
     {/* Head */}
     <path
@@ -474,7 +533,7 @@ const FireCatArt = ({ face }: { face: CatFace }) => (
 );
 
 // WATER CAT (Gato de Água): Azure blue and white coat, wave spiral tail, golden paws, luminous blue eyes
-const WaterCatArt = ({ face }: { face: CatFace }) => (
+const WaterCatArt = ({ face, swiping = false }: { face: CatFace; swiping?: boolean }) => (
   <svg viewBox="0 0 240 180" className="cat-expr w-full h-full drop-shadow-md">
     <defs>
       <linearGradient id="waterBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -534,13 +593,15 @@ const WaterCatArt = ({ face }: { face: CatFace }) => (
     {/* Foreleg Left */}
     <path d="M 142 105 Q 144 130 142 150 L 154 150 Q 157 130 157 110 Z" fill="#0284c7" />
     {/* Foreleg Right */}
-    <path d="M 162 105 Q 166 128 168 150 L 180 150 Q 178 128 174 105 Z" fill="#38bdf8" />
+    <g className={swiping ? 'cat-paw-swat' : undefined}>
+      <path d="M 162 105 Q 166 128 168 150 L 180 150 Q 178 128 174 105 Z" fill="#38bdf8" />
+      <rect x="166" y="146" width="16" height="6" rx="3" fill="#facc15" />
+    </g>
 
     {/* Golden Yellow Paws */}
     <rect x="68" y="146" width="16" height="6" rx="3" fill="#facc15" />
     <rect x="90" y="144" width="16" height="6" rx="3" fill="#facc15" />
     <rect x="140" y="146" width="16" height="6" rx="3" fill="#facc15" />
-    <rect x="166" y="146" width="16" height="6" rx="3" fill="#facc15" />
 
     {/* Head */}
     <path
@@ -574,7 +635,7 @@ const WaterCatArt = ({ face }: { face: CatFace }) => (
 );
 
 // WIND CAT (Gato de Vento): Silver/white fur, cloud cyclone tail, wing-like ear tufts, cyan eyes
-const WindCatArt = ({ face }: { face: CatFace }) => (
+const WindCatArt = ({ face, swiping = false }: { face: CatFace; swiping?: boolean }) => (
   <svg viewBox="0 0 240 180" className="cat-expr w-full h-full drop-shadow-md">
     <defs>
       <linearGradient id="windBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -626,13 +687,15 @@ const WindCatArt = ({ face }: { face: CatFace }) => (
     {/* Foreleg Left */}
     <path d="M 142 105 Q 144 130 142 150 L 154 150 Q 157 130 157 110 Z" fill="#94a3b8" />
     {/* Foreleg Right */}
-    <path d="M 162 105 Q 166 128 168 150 L 180 150 Q 178 128 174 105 Z" fill="#e2e8f0" />
+    <g className={swiping ? 'cat-paw-swat' : undefined}>
+      <path d="M 162 105 Q 166 128 168 150 L 180 150 Q 178 128 174 105 Z" fill="#e2e8f0" />
+      <rect x="166" y="146" width="16" height="6" rx="3" fill="#facc15" />
+    </g>
 
     {/* Golden/Sand Paws */}
     <rect x="68" y="146" width="16" height="6" rx="3" fill="#facc15" />
     <rect x="90" y="144" width="16" height="6" rx="3" fill="#facc15" />
     <rect x="140" y="146" width="16" height="6" rx="3" fill="#facc15" />
-    <rect x="166" y="146" width="16" height="6" rx="3" fill="#facc15" />
 
     {/* Head */}
     <path
@@ -670,7 +733,7 @@ const WindCatArt = ({ face }: { face: CatFace }) => (
 );
 
 // EARTH CAT (Gato de Terra): Mossy green-brown coat, craggy rock tail, root runes on legs, resolute gaze
-const EarthCatArt = ({ face }: { face: CatFace }) => (
+const EarthCatArt = ({ face, swiping = false }: { face: CatFace; swiping?: boolean }) => (
   <svg viewBox="0 0 240 180" className="cat-expr w-full h-full drop-shadow-md">
     <defs>
       <linearGradient id="earthBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -709,19 +772,21 @@ const EarthCatArt = ({ face }: { face: CatFace }) => (
     {/* Foreleg Left */}
     <path d="M 144 105 Q 146 130 144 150 L 158 150 Q 161 130 161 110 Z" fill="#451a03" />
     {/* Foreleg Right */}
-    <path d="M 164 105 Q 168 128 170 150 L 184 150 Q 182 128 176 105 Z" fill="#78350f" />
+    <g className={swiping ? 'cat-paw-swat' : undefined}>
+      <path d="M 164 105 Q 168 128 170 150 L 184 150 Q 182 128 176 105 Z" fill="#78350f" />
+      <path d="M 170 128 Q 174 138 172 148" stroke="#eab308" strokeWidth="2.5" fill="none" />
+      <rect x="166" y="146" width="18" height="6" rx="3" fill="#ca8a04" />
+    </g>
 
     {/* Golden Root / Magma Veins on Legs */}
     <path d="M 72 135 Q 76 142 74 148" stroke="#eab308" strokeWidth="2" fill="none" />
     <path d="M 94 130 Q 98 138 96 146" stroke="#eab308" strokeWidth="2.5" fill="none" />
     <path d="M 146 130 Q 152 140 148 148" stroke="#eab308" strokeWidth="2.5" fill="none" />
-    <path d="M 170 128 Q 174 138 172 148" stroke="#eab308" strokeWidth="2.5" fill="none" />
 
     {/* Golden Paws */}
     <rect x="68" y="146" width="18" height="6" rx="3" fill="#ca8a04" />
     <rect x="90" y="144" width="18" height="6" rx="3" fill="#ca8a04" />
     <rect x="140" y="146" width="18" height="6" rx="3" fill="#ca8a04" />
-    <rect x="166" y="146" width="18" height="6" rx="3" fill="#ca8a04" />
 
     {/* Resolute Head */}
     <path

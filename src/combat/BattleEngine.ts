@@ -44,6 +44,7 @@ export class BattleEngine {
       crit: baseStats.baseCrit,
       speed: baseStats.speed,
       specialCooldown: 0,
+      holdSpecialCooldown: false,
       shieldRounds: 0,
       isTaunting: false,
       burnRounds: 0,
